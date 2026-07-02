@@ -1,6 +1,6 @@
-def test_package_imports():
+def test_core_public_exports():
     import core
-    import camera
 
-    assert core.IntrusionFSM is not None
-    assert camera.CameraStream is not None
+    assert core.load_config is not None
+    assert core.postprocess_yolo is not None
+    assert core.DetectionHold is not None
