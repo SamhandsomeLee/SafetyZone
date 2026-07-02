@@ -74,11 +74,10 @@ class TensorRTBackend(InferBackend):
         self._output_tensor = output_tensor
         self._stream = stream
 
-    def infer_raw(self, bgr: np.ndarray) -> np.ndarray:
+    def infer_batch(self, batch: np.ndarray) -> np.ndarray:
         if self._context is None or self._input_tensor is None or self._output_tensor is None:
             raise RuntimeError("backend not loaded; call load() first")
 
-        batch, _meta = preprocess_bgr(bgr, input_size=self.input_size)
         self._input_tensor.copy_(torch.from_numpy(batch).to(self._input_tensor.device))
 
         context = self._context
@@ -91,6 +90,10 @@ class TensorRTBackend(InferBackend):
         self._stream.synchronize()
 
         return self._output_tensor.detach().cpu().numpy()
+
+    def infer_raw(self, bgr: np.ndarray) -> np.ndarray:
+        batch, _meta = preprocess_bgr(bgr, input_size=self.input_size)
+        return self.infer_batch(batch)
 
     def warmup(self, n: int = 3) -> None:
         dummy = np.zeros((self.input_size, self.input_size, 3), dtype=np.uint8)

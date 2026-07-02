@@ -26,12 +26,15 @@ class InferBackend(ABC):
         """Load engine / ONNX session from disk."""
 
     @abstractmethod
-    def infer_raw(self, bgr: np.ndarray) -> np.ndarray:
-        """
-        Run inference on a BGR uint8 frame.
+    def infer_batch(self, batch: np.ndarray) -> np.ndarray:
+        """Run inference on NCHW float32 batch (1, 3, H, W)."""
 
-        Returns raw YOLO output compatible with ``core.postprocess.parse_yolo_output``.
-        """
+    def infer_raw(self, bgr: np.ndarray) -> np.ndarray:
+        """Letterbox + infer; returns raw YOLO output in letterbox space."""
+        from detect.letterbox import preprocess_bgr
+
+        batch, _meta = preprocess_bgr(bgr, input_size=self.input_size)
+        return self.infer_batch(batch)
 
     @abstractmethod
     def warmup(self, n: int = 3) -> None:
