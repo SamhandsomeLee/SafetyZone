@@ -81,7 +81,36 @@ Jetson 完整运行 UI                  场内冻结测试集
 |--------|----------|
 | **M2** | Jetson 上 stock FP16 engine 推理成功 |
 | **M-Bootstrap** | **运行 UI 端到端**：视频 → 划区 → 运行 → 报警与信号正确；config 可保存 |
-| **M3** | 离线编排骨架可复现信号（本机 pytest/demo，可与 Bootstrap 并行） |
+| **M3** | 离线编排骨架可复现信号（Win pytest/demo，可与 Bootstrap 并行） |
+
+### 1.6 远程开发（D12）
+
+研发通过 **SSH / Cursor Remote** 在 Jetson 上开发与验证；Win 本机保留 `pytest tests/core`。
+
+**分工**
+
+| 位置 | 任务 |
+|------|------|
+| **Jetson（主）** | export / trtexec、M2 冒烟、`trt_backend`、pipeline、运行 UI、M-Bootstrap |
+| **Win（辅）** | core 改动、git、可选 `onnx_backend` 对照 |
+
+**Jetson Day 0（远程执行）**
+
+```bash
+cd ~/SafetyZone && git pull
+python3 --version && nvidia-smi
+pip install -e ".[dev,jetson]"   # 或按 pyproject 分组逐步安装
+mkdir -p models/stock data/sample_videos
+yolo export model=yolov8s.pt format=onnx imgsz=640 opset=18 simplify=True dynamic=False
+mv yolov8s.onnx models/stock/
+trtexec --onnx=models/stock/yolov8s.onnx --saveEngine=models/stock/yolov8s.engine --fp16
+# M2 冒烟（Sprint 1.2 实现 tools/jetson_infer_smoke.py 后）
+# python tools/jetson_infer_smoke.py --engine models/stock/yolov8s.engine --image test.jpg
+```
+
+**大文件**：`*.engine`、`demo.mp4` 用 `scp` 传到 Jetson，不提交 git。
+
+**运行 UI**：接 Jetson 显示器或 VNC 后再启动 `app/main.py`；SSH 终端内无图形时仅验证 TRT/CLI。
 
 ---
 
@@ -125,3 +154,4 @@ Jetson 完整运行 UI                  场内冻结测试集
 | windows_studio 替代 Jetson UI | studio 只做训练闭环；监视/划区在 Jetson |
 | 必须先有 A100 | 不需要；导出在 Jetson 或 Win 即可 |
 | 必须先有 PLC 真机才能验 UI | PLC **仿真**可先过 UI 验收（D11） |
+| 必须等 Win 本机 Sprint 1.2 完成才能上 Jetson | **Jetson-first**（D12）；TRT 主验证在板上 |

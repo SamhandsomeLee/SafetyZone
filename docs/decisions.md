@@ -4,7 +4,7 @@
 
 | 字段 | 值 |
 |------|-----|
-| 确认日期 | 2026-07-01（D1–D4）；**2026-07-02 修订**（D8–D11） |
+| 确认日期 | 2026-07-01（D1–D4）；**2026-07-02**（D8–D11）；**2026-07-03**（D12） |
 | 确认人 | 研发 + 待现场签字 |
 
 ---
@@ -111,6 +111,21 @@
 
 ---
 
+## D12 — Jetson 远程开发（2026-07-03）
+
+**决策：研发已通过 SSH / Cursor Remote 连接 Jetson，Bootstrap 与 Sprint 1.2 起在板上主验证**
+
+| 项 | 约定 |
+|----|------|
+| 连接 | SSH Host 别名（如 `jetson-137`）；Cursor **Remote-SSH** 在 Jetson 工作区开发 |
+| 代码同步 | `git push`（Win）→ `git pull`（Jetson）；或大文件 `scp`（`*.engine`、`demo.mp4` 不进 git） |
+| 验证主战场 | **Jetson**：export → trtexec → `trt_backend` → UI → M-Bootstrap |
+| Win 本机 | `core/` 单测、可选 `onnx_backend` 对照；**不阻塞**上板 |
+| 运行 UI 显示 | PySide6 需 Jetson **本地 HDMI 显示器** 或 **VNC/桌面**；纯 SSH 无 DISPLAY 时先做 TRT/CLI，UI 接屏后再验 M-Bootstrap |
+| Jetson 工作目录 | 建议 `~/SafetyZone`（与仓库 clone 路径一致，写入团队备忘） |
+
+---
+
 ## 两套 UI 分工（勿混淆）
 
 | 程序 | 部署 | 用途 |
@@ -129,3 +144,4 @@
 | PLC block vs command 模式 | 真机联调时 |
 | S7 PUT/GET 是否开启 | 真机联调时 |
 | stock 模型是否允许接 PLC 真机做联调信号测试 | **允许**（须标集成测试，非正式上岗） |
+| Jetson SSH Host / 工作目录 | 团队备忘（D12） |
