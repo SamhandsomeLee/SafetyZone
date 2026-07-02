@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Models & large binaries
+*.engine
+*.onnx
+*.pt
+*.weights
+
+# Runtime data
+data/
+outbox/
+inbox/
+recordings/
+*.mp4
+*.avi
+*.mkv
+
+# Config backups & secrets
+config.json
+config.json.bak*
+.env
+*.pem
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+Thumbs.db
+.DS_Store
