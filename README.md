@@ -28,16 +28,29 @@ pip install -e ".[dev]"
 pytest tests/ -v
 ```
 
-## Jetson：Bootstrap Day 0
+## Jetson：Bootstrap Day 0（Win 导出 → scp → 板上编 engine）
+
+**Win 本机（有网）** 导出 ONNX 并推到 Jetson：
+
+```powershell
+cd E:\SafetyZone
+yolo export model=yolov8s.pt format=onnx imgsz=640 opset=18 simplify=True dynamic=False
+scp yolov8s.onnx nvidia@<jetson-ip>:~/Desktop/SafetyZone/models/stock/
+# 可选：含人测试视频
+scp demo.mp4 nvidia@<jetson-ip>:~/Desktop/SafetyZone/data/sample_videos/
+```
+
+**Jetson（无需外网）** 编 FP16 engine + M2 冒烟：
 
 ```bash
-cd ~/SafetyZone && git pull
+cd ~/Desktop/SafetyZone
 pip install -e ".[dev,jetson]"
-mkdir -p models/stock data/sample_videos
-yolo export model=yolov8s.pt format=onnx imgsz=640 opset=18 simplify=True dynamic=False
-mv yolov8s.onnx models/stock/
-trtexec --onnx=models/stock/yolov8s.onnx --saveEngine=models/stock/yolov8s.engine --fp16
+bash tools/offline_check.sh
+bash tools/build_engine.sh
+python tools/jetson_infer_smoke.py --engine models/stock/yolov8s.engine
 ```
+
+大文件（`*.onnx` / `*.engine` / `demo.mp4`）不进 git，统一 Win scp 同步。
 
 ## 仓库结构
 

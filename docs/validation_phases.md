@@ -94,21 +94,26 @@ Jetson 完整运行 UI                  场内冻结测试集
 | **Jetson（主）** | export / trtexec、M2 冒烟、`trt_backend`、pipeline、运行 UI、M-Bootstrap |
 | **Win（辅）** | core 改动、git、可选 `onnx_backend` 对照 |
 
-**Jetson Day 0（远程执行）**
+**Jetson Day 0（Win scp ONNX → 板上 trtexec）**
 
-```bash
-cd ~/SafetyZone && git pull
-python3 --version && nvidia-smi
-pip install -e ".[dev,jetson]"   # 或按 pyproject 分组逐步安装
-mkdir -p models/stock data/sample_videos
+Win 本机 export + scp：
+
+```powershell
 yolo export model=yolov8s.pt format=onnx imgsz=640 opset=18 simplify=True dynamic=False
-mv yolov8s.onnx models/stock/
-trtexec --onnx=models/stock/yolov8s.onnx --saveEngine=models/stock/yolov8s.engine --fp16
-# M2 冒烟（Sprint 1.2 实现 tools/jetson_infer_smoke.py 后）
-# python tools/jetson_infer_smoke.py --engine models/stock/yolov8s.engine --image test.jpg
+scp yolov8s.onnx nvidia@<jetson-ip>:~/Desktop/SafetyZone/models/stock/
 ```
 
-**大文件**：`*.engine`、`demo.mp4` 用 `scp` 传到 Jetson，不提交 git。
+Jetson：
+
+```bash
+cd ~/Desktop/SafetyZone
+pip install -e ".[dev,jetson]"
+bash tools/offline_check.sh
+bash tools/build_engine.sh
+python tools/jetson_infer_smoke.py --engine models/stock/yolov8s.engine
+```
+
+**大文件**：`*.onnx` / `*.engine`、`demo.mp4` 用 Win scp 传到 Jetson，不提交 git。
 
 **运行 UI**：接 Jetson 显示器或 VNC 后再启动 `app/main.py`；SSH 终端内无图形时仅验证 TRT/CLI。
 
