@@ -1,0 +1,132 @@
+"""Background inference thread (detection must not run on UI thread)."""
+
+from __future__ import annotations
+
+import logging
+import time
+from pathlib import Path
+
+from PySide6.QtCore import QThread, Signal
+
+from app.camera_source import resolve_video_path, video_loop_for_station
+from app.frame_bridge import FramePayload
+from app.pipeline import StationRunner, resolve_station
+from app.visualize import render_monitor_frame
+from camera.video_file import VideoFileStream
+from core.config import AppConfig, load_config
+from detect.backend import create_backend
+
+logger = logging.getLogger(__name__)
+
+
+class InferenceWorker(QThread):
+    """Read frames, run TRT pipeline, emit annotated payloads to the UI."""
+
+    frame_ready = Signal(object)
+    error_occurred = Signal(str)
+    running_changed = Signal(bool)
+
+    def __init__(
+        self,
+        *,
+        config: AppConfig | Path | str,
+        engine_path: Path | str,
+        station_id: str | None = None,
+        project_root: Path | None = None,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self._config_path: Path | None = None
+        if isinstance(config, AppConfig):
+            self._config = config
+        else:
+            self._config_path = Path(config)
+            self._config = load_config(self._config_path)
+        self._engine_path = Path(engine_path)
+        self._station_id = station_id
+        self._project_root = project_root or Path.cwd()
+        self._stop_requested = False
+
+    def request_stop(self) -> None:
+        self._stop_requested = True
+
+    def run(self) -> None:
+        self._stop_requested = False
+        self.running_changed.emit(True)
+        try:
+            self._run_loop()
+        except Exception as exc:  # pragma: no cover - surfaced to UI
+            logger.exception("inference worker failed")
+            self.error_occurred.emit(str(exc))
+        finally:
+            self.running_changed.emit(False)
+
+    def _run_loop(self) -> None:
+        station, param = resolve_station(self._config, self._station_id)
+        runner = StationRunner(station=station, param=param)
+        video_path = resolve_video_path(self._config, station, root=self._project_root)
+        loop = video_loop_for_station(self._config, station)
+
+        if not video_path.is_file():
+            raise FileNotFoundError(f"video not found: {video_path}")
+        if not self._engine_path.is_file():
+            raise FileNotFoundError(f"engine not found: {self._engine_path}")
+
+        stream = VideoFileStream(video_path, loop=loop)
+        stream.start()
+
+        ref_size = (param.ref_width, param.ref_height)
+        frame_index = 0
+        run_t0 = time.perf_counter()
+
+        try:
+            with create_backend("tensorrt", self._engine_path) as backend:
+                backend.warmup(2)
+                while not self._stop_requested:
+                    t0 = time.perf_counter()
+                    frame = stream.get_frame()
+                    if frame is None:
+                        if loop:
+                            continue
+                        break
+
+                    signal, zone_hit, detections, fault = runner.process(
+                        frame,
+                        backend=backend,
+                        frame_index=frame_index,
+                        timestamp_ms=frame_index * (1000.0 / 15.0),
+                    )
+                    infer_ms = (time.perf_counter() - t0) * 1000.0
+                    elapsed = time.perf_counter() - run_t0
+                    process_fps = (frame_index + 1) / elapsed if elapsed > 0 else 0.0
+
+                    overlay = render_monitor_frame(
+                        frame,
+                        detections=detections,
+                        slow_polygon=param.slow_polygon,
+                        stop_polygon=param.stop_polygon,
+                        ref_size=ref_size,
+                        anchor_mode=station.detect_mode,
+                        min_overlap=param.min_overlap,
+                        signal=signal,
+                        frame_index=frame_index,
+                        infer_ms=infer_ms,
+                        process_fps=process_fps,
+                        fault=fault,
+                    )
+
+                    payload = FramePayload(
+                        station_id=station.id,
+                        frame_index=frame_index,
+                        signal=signal,
+                        zone_hit=zone_hit,
+                        detections=tuple(detections),
+                        infer_ms=infer_ms,
+                        process_fps=process_fps,
+                        fault=fault,
+                        overlay_bgr=overlay,
+                    )
+                    self.frame_ready.emit(payload)
+                    frame_index += 1
+        finally:
+            stream.stop()

@@ -39,6 +39,7 @@ windows = [
 
 [project.scripts]
 safetyzone-demo = "app.demo:main"
+safetyzone = "app.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
