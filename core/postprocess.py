@@ -97,6 +97,50 @@ def filter_detections(
     return out
 
 
+def _parse_person_vectorized(
+    arr: np.ndarray,
+    *,
+    conf: float,
+    min_area: float,
+) -> list[Detection]:
+    """Fast path for COCO class-0 (person) only."""
+    scores = arr[:, 4]
+    mask = scores >= conf
+    if not np.any(mask):
+        return []
+
+    boxes = arr[mask, :4]
+    scores = scores[mask]
+    cx = boxes[:, 0]
+    cy = boxes[:, 1]
+    w = boxes[:, 2]
+    h = boxes[:, 3]
+    half_w = w * 0.5
+    half_h = h * 0.5
+    x1 = cx - half_w
+    y1 = cy - half_h
+    x2 = cx + half_w
+    y2 = cy + half_h
+    areas = w * h
+    if min_area > 0:
+        area_mask = areas >= min_area
+        if not np.any(area_mask):
+            return []
+        x1, y1, x2, y2, scores = x1[area_mask], y1[area_mask], x2[area_mask], y2[area_mask], scores[area_mask]
+
+    return [
+        Detection(
+            x1=float(x1[i]),
+            y1=float(y1[i]),
+            x2=float(x2[i]),
+            y2=float(y2[i]),
+            conf=float(scores[i]),
+            class_id=PERSON_CLASS_ID,
+        )
+        for i in range(scores.shape[0])
+    ]
+
+
 def parse_yolo_output(
     output: np.ndarray,
     *,
@@ -113,7 +157,7 @@ def parse_yolo_output(
       - (N, 4+nc)
     Box format: center-x, center-y, width, height (letterbox space).
     """
-    arr = np.asarray(output, dtype=np.float64)
+    arr = np.asarray(output, dtype=np.float32)
     if arr.ndim == 3:
         arr = arr[0]
 
@@ -124,6 +168,9 @@ def parse_yolo_output(
 
     if arr.shape[1] < 5:
         raise ValueError(f"expected at least 5 columns (box + class), got {arr.shape[1]}")
+
+    if class_ids == (PERSON_CLASS_ID,):
+        return _parse_person_vectorized(arr, conf=conf, min_area=min_area)
 
     boxes = arr[:, :4]
     class_scores = arr[:, 4:]

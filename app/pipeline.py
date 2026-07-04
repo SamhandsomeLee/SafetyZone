@@ -31,6 +31,14 @@ def _scale_detection(det: Detection, meta: LetterboxMeta) -> Detection:
     )
 
 
+def scale_detections_to_frame(
+    detections: list[Detection],
+    meta: LetterboxMeta,
+) -> list[Detection]:
+    """Map letterbox-space detections to original frame coordinates."""
+    return [_scale_detection(det, meta) for det in detections]
+
+
 def _best_zone_hit(
     detections: list[Detection],
     *,
@@ -90,7 +98,7 @@ class StationRunner:
             min_area=self.param.min_box_area,
             class_ids=(0,),
         )
-        detections = [_scale_detection(det, meta) for det in letterbox_dets]
+        detections = scale_detections_to_frame(letterbox_dets, meta)
         detections = self.hold.apply(detections, timestamp_ms)
 
         frame_h, frame_w = frame.shape[:2]

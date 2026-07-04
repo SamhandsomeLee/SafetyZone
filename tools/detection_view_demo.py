@@ -86,11 +86,14 @@ def _draw_detection(
     )
     color = _zone_color(zone)
     x1, y1, x2, y2 = map(int, (det.x1, det.y1, det.x2, det.y2))
-    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
     label = f"person {det.conf:.2f}"
     if zone:
         label += f" [{zone.upper()}]"
-    cv2.putText(frame, label, (x1, max(18, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+    (tw, th), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+    ty = max(th + 6, y1 - 4)
+    cv2.rectangle(frame, (x1, ty - th - 6), (x1 + tw + 4, ty + baseline), color, -1)
+    cv2.putText(frame, label, (x1 + 2, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 2)
 
 
 def _draw_hud(
@@ -297,10 +300,8 @@ def main() -> int:
         display = _ensure_display()
 
     output = args.output
-    if not display and output is None:
+    if not display and output is None and not args.fast:
         output = Path("data/sample_videos/demo_annotated.mp4")
-    if args.fast and args.output is None:
-        output = None
 
     return run_demo(
         video_path=Path(args.video),

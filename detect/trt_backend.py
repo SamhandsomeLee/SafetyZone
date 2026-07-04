@@ -35,6 +35,7 @@ class TensorRTBackend(InferBackend):
         self._input_tensor: object | None = None
         self._output_tensor: object | None = None
         self._stream: object | None = None
+        self._pin_batch: object | None = None
 
     def load(self, model_path: str | Path) -> None:
         if trt is None:
@@ -62,6 +63,8 @@ class TensorRTBackend(InferBackend):
         input_tensor = _allocate_tensor(engine, context, input_name, torch.float32)
         output_tensor = _allocate_tensor(engine, context, output_name, torch.float32)
         stream = torch.cuda.Stream()
+        pin_shape = (1, 3, self.input_size, self.input_size)
+        pin_batch = torch.empty(pin_shape, dtype=torch.float32, pin_memory=True)
 
         self._engine_path = path
         self._logger = logger
@@ -73,12 +76,16 @@ class TensorRTBackend(InferBackend):
         self._input_tensor = input_tensor
         self._output_tensor = output_tensor
         self._stream = stream
+        self._pin_batch = pin_batch
 
     def infer_batch(self, batch: np.ndarray) -> np.ndarray:
         if self._context is None or self._input_tensor is None or self._output_tensor is None:
             raise RuntimeError("backend not loaded; call load() first")
 
-        self._input_tensor.copy_(torch.from_numpy(batch).to(self._input_tensor.device))
+        if not batch.flags["C_CONTIGUOUS"]:
+            batch = np.ascontiguousarray(batch)
+        self._pin_batch.copy_(torch.from_numpy(batch))
+        self._input_tensor.copy_(self._pin_batch, non_blocking=True)
 
         context = self._context
         context.set_tensor_address(self._input_name, int(self._input_tensor.data_ptr()))
@@ -111,6 +118,7 @@ class TensorRTBackend(InferBackend):
         self._input_tensor = None
         self._output_tensor = None
         self._stream = None
+        self._pin_batch = None
 
 
 def _io_tensor_names(engine: object) -> tuple[str, str]:
