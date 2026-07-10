@@ -1,0 +1,74 @@
+---
+description: 多 agent / worktree 并行纪律。在 /design-parallel、/parallel、Multitask 多 lane、或用户要求并行推进执行计划时应用。
+alwaysApply: false
+---
+
+# 并行 Lane 纪律
+
+与单条工作流兼容；并行只增加**编排与隔离**，不降低质量门。
+
+## 单 lane / 脊梁每步强制流程
+
+```
+/design → 执行 → /review → 修复 → 提交
+```
+
+| 步 | 含义 |
+|----|------|
+| `/design` | `plan-designer` 出单条落地方案；用户确认后再写码 |
+| 执行 | 按方案改本 worktree「可改」路径 |
+| `/review` | `code-reviewer`；有 BLOCKER/MAJOR 则修复后**重跑**针对性复查 |
+| 修复 | 改到无 BLOCKER/MAJOR（或用户明示接受残留 MINOR） |
+| **提交** | review 通过后**自动**于本 worktree 走 `/commit`；**不等于** merge |
+
+- Spine 在同一 worktree 内按 Step 推进时，**每一步**都走完整上表（方案 **A**）。
+- 禁止跳步；禁止整条脊梁只 review / 只 commit 一次。
+- 当前 Step 存在未清 BLOCKER → 停止并回报，不得进入下一步。
+
+## 两段式入口
+
+1. **`/design-parallel`**（`parallel-planner`）——只编排。
+2. **用户确认后** → `/parallel` 或 Multitask 按 brief 启动。
+
+未确认编排不得开多 lane 写码。
+
+## 切分模型
+
+| 类型 | 执行者 | 内容 |
+|------|--------|------|
+| **Parallel Lanes** | 多个 sub-agent | 彼此无依赖的 Sprint/F 任务 |
+| **Serial Spine** | **一个** sub-agent | 必须串行的任务，合并为有序工作流 |
+
+## 隔离（Worktree）
+
+- 一 lane（含 Spine）一 worktree / 分支；**禁止**多 agent 同 checkout 硬并行。
+- Agent 只改 brief「可改」路径；「禁改」为硬约束。
+
+## Commit vs Merge
+
+| 动作 | 谁决定 |
+|------|--------|
+| commit（本 worktree） | review 通过后 agent 自动 |
+| merge / push 到 master | **仅用户** |
+
+## 共享文件敏感列表（命中多项 → 倾向串行或拆接线）
+
+- `app/pipeline.py`
+- `app/frame_bridge.py`
+- `app/inference_worker.py`
+- `app/run_controller.py`
+- `ui/main_window.py`
+- `core/config.py`
+- `core/fsm.py`
+- `core/zone.py`
+- `configs/config.example.json`
+- `detect/backend.py`
+- `detect/trt_backend.py`
+
+## 记忆单写者
+
+`decisions.md` / `review-log.md` / `pitfalls.md`：主会话单写者；parallel lane 不抢写。
+
+## 进度校正
+
+编排前以 `docs/安全区入侵检测系统_执行方案.md` + `.cursor/memory/review-log.md` + 仓库实况为准；执行方案勾选可能滞后于代码（如 UI-1 已合并但文档仍标 ❌）。

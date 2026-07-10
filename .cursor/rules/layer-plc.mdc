@@ -1,0 +1,32 @@
+---
+description: "PLC 适配：仿真、信号映射、进程隔离"
+globs:
+  - "plc/**"
+---
+
+# PLC 层（plc）
+
+## 模式
+
+| 模式 | 用途 |
+|------|------|
+| `plc.simulate` | Bootstrap（D11）：不连 snap7；UI 显示拟写入 INT16 |
+| `plc.enabled` + 真机 | Sprint 2.3：S7-1200/1500；独立进程 Gateway |
+
+## 信号回写（本系统 INT16）
+
+与设计方案 §6.3 / §6.4 对齐；**禁止**直接使用旧版 `result_code` 数值。
+
+常见语义：`0` 安全 / `1` SLOW / `2` STOP / `-1` 故障或无结果（以设计方案与 SignalAdapter 为准；过渡态 `signal==0` 的 PLC 映射须显式约定）。
+
+## 纪律
+
+- 真机通信：**独立进程** + 队列与主进程换信号；避开 GIL 与 Qt 抖动。
+- 单连接串行化；`auto_reconnect` / 看门狗；写后读回校验。
+- 断连可配置 HOLD；UI 标 OFFLINE·HOLD。
+- Bootstrap 未接 PLC 时不得假装已连真机。
+
+## 不做
+
+- 不在 plc 内做检测或划区
+- 不把训练/studio 逻辑放入本层

@@ -1,0 +1,37 @@
+---
+description: "app/ 编排层：pipeline、worker、FrameBridge"
+globs:
+  - "app/**"
+---
+
+# 编排层（app）
+
+## 职责
+
+- 单工位流水线：取帧 → 推理 → 后处理 → 判区 → FSM → 信号
+- 后台推理线程与 UI 解耦
+- 帧/事件经 `FrameBridge` 推到 UI（等价旧版 FrameBridge，见 MIGRATION §5.4）
+
+## 关键模块
+
+| 模块 | 说明 |
+|------|------|
+| `pipeline.py` | 单工位处理；同相机多工位只推理一次、结果分发（多工位阶段） |
+| `inference_worker.py` | QThread/后台循环；禁止在 UI 线程 `infer` |
+| `frame_bridge.py` | `FramePayload`：station_id、signal、detections overlay、fps、plc 拟写入等 |
+| `run_controller.py` | 启停、绑定 config/engine/station |
+| `main.py` | Jetson 运行 UI 入口；无 DISPLAY 时先提示/设 `:0` |
+| `demo.py` | 无 UI CLI 回归（M3） |
+
+## 纪律
+
+- 检测与 PLC IO **不得**在 Qt 主线程执行。
+- Payload 中的图像须为可安全跨线程的副本（配合相机 `.copy()`）。
+- Bootstrap 阶段 PLC 可为仿真：仍填充拟写入 INT16，供状态栏显示。
+- 热切换 engine（阶段二+）：加载 → warmup → 原子替换；不在单帧中途切。
+
+## 不做
+
+- 不在 app 内实现划区几何（用 `core.zone`）
+- 不在 app 内写 PySide6 控件布局（属 `ui/`）
+- 不把 `windows_studio` 逻辑塞进 Jetson 入口

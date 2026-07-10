@@ -1,0 +1,76 @@
+---
+description: Git 提交信息规范（Conventional Commits）
+alwaysApply: true
+---
+
+# Git 提交规范
+
+格式：`<type>(<scope>): <subject>`，subject 用中文，祈使句，不加句号，≤ 50 字。
+
+## type（必填）
+
+- `feat` 新功能 | `fix` 修复 | `refactor` 重构 | `test` 测试
+- `docs` 文档 | `chore` 杂务/依赖 | `perf` 性能 | `style` 格式
+
+## scope（本仓库）
+
+| scope | 含义 |
+|-------|------|
+| `core` | 判区 / FSM / 配置 / 后处理 / 跟踪 |
+| `detect` | 推理后端、letterbox、TRT/ONNX |
+| `app` | pipeline、worker、FrameBridge、入口 |
+| `ui` | PySide6 运行 UI |
+| `camera` | 视频文件 / USB 采集 |
+| `plc` | PLC gateway / 仿真 |
+| `record` | 报警录像 |
+| `tools` | 冒烟 / benchmark / 编 engine 脚本 |
+| `docs` | 设计/执行/验证/迁移文档 |
+| `cursor` | Cursor rules / agents / commands / memory |
+| `project` | pyproject、依赖、仓库基础设施 |
+
+## 规则
+
+- 一次提交只做一件事；跨模块大改拆成多个提交。
+- body（可选）解释 **why** 而非 what，与 subject 空一行。
+- 关联里程碑时在 footer 注明，如 `Milestone: M-Bootstrap` 或 `Sprint: UI-2`。
+
+## 提交与合入权限（强制，优先级最高）
+
+### 自动提交（lane / 单条门禁内）
+
+完整门禁 `/design → 执行 → /review → 修复` 结束后，若 **无未清 BLOCKER/MAJOR**（或用户明示接受残留 MINOR），agent **应立即**在本 worktree 按本规范执行 `/commit`（或等价 `git add` + `git commit`），**不必**再等用户说「提交 / commit」。
+
+提交前仍须：
+
+- 用 `git status` / `git diff` 确认范围；排除 `__pycache__/`、`*.egg-info/`、`*.engine`、`*.onnx`、大视频等。
+- 并行 lane：只纳入 brief「可改」路径；「禁改」有改动则停下报告，不提交。
+- 推荐走命令 `/commit`（含 review 门禁核对）。
+
+**禁止**在未完成 review（或未清 BLOCKER/MAJOR）时提前 commit；禁止把无关脏文件塞进同一次提交。
+
+### 合入主分支须用户审批（宪法级）
+
+下列操作**未经用户在本轮明确要求，一律不得执行**：
+
+- `git merge` / `git rebase` / `git cherry-pick` 等把 lane/spine 分支合入 `master` / `main`
+- `git push` / `git push --force`（含推送到共享远程）
+
+并行与大 agent 场景（见 `parallel-lanes.mdc`）：
+
+- **lane / spine 内 commit**：review 通过后自动执行，落在本 worktree 分支。
+- **合入 master**：大 agent 整段结束后汇报分支名与 commit；**是否 merge 仅用户审批**。
+
+### 其他 git 写操作
+
+- `git commit --amend`、改写已推送历史等：仍须用户明确要求。
+- 创建 worktree / 新分支：按 `/parallel` 或用户当轮指示；未授权不擅自改主工作区 checkout。
+
+## 示例
+
+```
+feat(ui): 实现安全区划区编辑与配置保存
+
+Bootstrap 最小集缺划区无法验收 M-Bootstrap。
+Milestone: M-Bootstrap
+Sprint: UI-2
+```

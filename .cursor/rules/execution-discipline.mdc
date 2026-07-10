@@ -1,0 +1,38 @@
+---
+description: "编码执行纪律：证据门 + 常见失败模式护栏"
+alwaysApply: true
+---
+
+# 执行纪律
+
+源自 harness 工程实践对大模型 coding 常见失败模式的防护。适用于本仓库所有编码/调试任务。
+
+## 一、证据门（Chain-of-Evidence，禁止谎报成功）
+
+- **不得在未实际运行验证命令的情况下声称「测试通过 / 构建成功 / 完成」。**
+- 声称某项通过时，必须附上**真实执行的命令与关键输出**（如 `pytest tests/ -v`、Jetson 冒烟脚本尾部、M-Bootstrap 清单逐条对照）。
+- 输出噪声、报错、warning 未消除时**不得宣布成功**；如实报告「仍失败/存疑」。
+- 每个「已完成」结论都应可追溯到一条证据（命令输出、diff、验收标准逐条对照）。
+
+## 二、失败模式护栏
+
+1. **警惕训练默认值偏置**：用库/API 前先核对 `pyproject.toml` 与现有代码风格，不凭记忆写过时写法。
+2. **禁止实现漂移**：变复杂时不得**悄悄**改用更简单方案替代《执行方案》/《设计方案》既定做法。确需变更 → `/design` 对齐并在 `.cursor/memory/decisions.md` 或 `docs/decisions.md`（产品级）记一条。
+3. **对抗过度乐观**：见上「证据门」。宁可报告失败，也不假装成功。
+4. **对抗记忆退化**：长任务关键结论写入 `.cursor/memory/`（协议见 `memory.mdc`）。
+5. **保留负面结果**：放弃的方案 / 踩坑记入 `pitfalls.md`。
+6. **守住品味与边界**：拿不准的取舍、越界风险交用户审批；不擅自扩大改动范围。
+
+## 三、闭环
+
+- 遇错 → 定位根因 → 修复 → **重跑针对性验证**，而非修完即宣称通过。
+- 冲突以文档为准：与《执行方案》/《设计方案》/`core-boundary` 冲突时，停下并指出文档位置，不强行推进。
+
+## 四、本仓库常用验证命令
+
+| 场景 | 命令 / 依据 |
+|------|-------------|
+| Win 单测 | `pytest tests/ -v` |
+| Jetson M2 | `python tools/jetson_infer_smoke.py --engine models/stock/yolov8s.engine` |
+| 运行 UI | `bash tools/run_ui.sh` 或 `python -m app.main`（需 DISPLAY） |
+| Bootstrap | `docs/validation_phases.md` §1.3 |

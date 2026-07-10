@@ -1,0 +1,39 @@
+---
+description: ".cursor/memory 长期记忆的读写与控量协议"
+alwaysApply: true
+---
+
+# 长期记忆协议
+
+`.cursor/memory/` 是 harness 的跨会话记忆，三个文件：
+
+| 文件 | 内容 | ID |
+|------|------|----|
+| `decisions.md` | harness / 落地设计取舍 | `D-NNN` |
+| `pitfalls.md` | 已复现的失败模式与负面结论 | `P-NNN` |
+| `review-log.md` | 每次 `/review` 的 BLOCKER/MAJOR 摘要 | `R-<Sprint或主题>` |
+
+## 与产品决策的分工
+
+- **产品决策 D1–D12**（检测模式、PLC、Bootstrap 策略等）权威在 **`docs/decisions.md`**，不要在 memory 重复全文。
+- **`.cursor/memory/decisions.md`** 只记：实现取舍、harness 流程、某次 Sprint 的技术默认值。
+- 引用产品决策时写「见 docs/decisions.md D12」即可。
+
+## 读取（避免主上下文承压）
+
+- **优先由子代理读**：`plan-designer` / `parallel-planner` / `code-reviewer` / `harness-reviewer` 在各自上下文读取，只把**与当前任务相关的少数条目**抛回主线程。
+- **主代理不批量载入记忆全文**；确需查某条时定向 grep/read。
+- **并行时**：记忆文件保持**单写者**（主会话）。
+
+## 写入（只有主代理写，追加式）
+
+- 非平凡设计取舍 → `decisions.md`
+- bug / 弯路 / 放弃方案 → `pitfalls.md`
+- `/review` 结束 → `review-log.md`
+- 未经用户授权写记忆属于允许的本地文件操作；**不得**借此触发 git 写操作。
+
+## 控量
+
+- 单条 ≤ ~8 行；只记结论与根因。
+- 每文件超过约 40 条时去重合并；已固化进 `rules/*.mdc` 的可标注「已上升为规则」并精简。
+- 记忆是索引与线索，不是完整档案。

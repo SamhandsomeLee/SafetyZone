@@ -1,0 +1,31 @@
+---
+description: "推理适配器：backend、letterbox、TRT"
+globs:
+  - "detect/**"
+---
+
+# 推理层（detect）
+
+## 接口
+
+- `backend.py`：统一推理后端抽象（`infer` 等）
+- `letterbox.py`：预处理；与后处理坐标还原一致
+- `trt_backend.py`：**Jetson 主路径**；FP16 engine
+- `onnx_backend.py`：Win/对照可选；**不阻塞** M-Bootstrap
+
+## 纪律
+
+- engine 与 GPU + TensorRT 版本绑定；**只在 Jetson 本机** `trtexec` 编译。
+- 默认 FP16；INT8 非默认（需校准集 + 精度门槛）。
+- Bootstrap 仅 **person**（COCO class 0）；object/anomaly 不进本层主路径（D1）。
+- 热切换：新 engine 加载 + warmup 后原子替换；单帧中途不切。
+
+## 工具链
+
+- `tools/build_engine.sh`、`tools/jetson_infer_smoke.py`：M2 冒烟
+- 大文件 `*.onnx` / `*.engine` 不进 git；Win scp → Jetson
+
+## 不做
+
+- 不在 detect 内做判区 / FSM（属 core）
+- 不在 detect 内弹 UI

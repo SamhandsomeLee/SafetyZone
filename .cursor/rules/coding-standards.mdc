@@ -1,0 +1,39 @@
+---
+description: "SafetyZone Python 编码规范"
+alwaysApply: true
+---
+
+# 编码规范
+
+## Python
+
+- Python 3.10+；优先 `X | Y` 联合类型、`match/case`（若已有风格则跟随）。
+- 公开函数/方法/类：完整 type hints。
+- 命名：模块/函数/变量 `snake_case`；类 `PascalCase`；常量 `UPPER_SNAKE_CASE`；私有 `_` 前缀。
+
+## 分层依赖
+
+- `core/` → 仅标准库 + numpy（见 `core-boundary.mdc`）。
+- `detect` / `camera` / `plc` / `record` → 可依赖对应硬件库；**不得**反向被 core import。
+- `ui/` → PySide6；经 app 控制器交互；不直接 `trt_backend.infer()`。
+- `app/` → 可编排 core + 适配器；保持 UI 可替换（CLI demo 与 UI 共用 pipeline）。
+
+## Qt / 线程
+
+- 跨线程更新控件：只用信号槽（或经 FrameBridge），禁止工作线程直接改 QWidget。
+- 长时间 IO / 推理：后台线程或独立进程（PLC）。
+
+## 错误与日志
+
+- 用 `logging`；关键路径可打日志，但勿把密钥/现场敏感配置打到默认 INFO 对外展示。
+- 相机断线、engine 加载失败：向上变成可展示的故障态（signal/FAULT），不静默吞掉。
+
+## 配置
+
+- 单一 `config.json` 体系；损坏回退备份；**原子写**（tmp→replace）。
+- 变更配置 API 走 `core.config`，避免各处手写 JSON。
+
+## 注释与范围
+
+- 只注释非显而易见的约束（如信号语义、拷贝帧原因）。
+- 不顺手重构无关文件；不扩 scope 到阶段三模块除非任务明确要求。

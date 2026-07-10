@@ -1,0 +1,88 @@
+---
+description: "SafetyZone 项目全局架构约束与核心不变量。所有开发必须遵守。"
+alwaysApply: true
+---
+
+# SafetyZone — 安全区入侵检测（Jetson 边缘）
+
+## 项目定位
+
+工业产线安全区入侵检测：多路相机/视频 → YOLOv8 person 检测 → 判区 + 状态机 → PLC 联动 + 报警录像。
+
+部署形态：单台 **Jetson Orin Nano Super 8GB** 现场边缘机；运行 UI 为 **PySide6**；模型闭环训练在调试人员 **Windows GPU**（阶段三）。
+
+本仓库为既有 PyQt6/Windows 版的 **Jetson 重构**；功能按 `docs/MIGRATION_SPEC.md`（F01–F38）语义等价迁移，Bootstrap 按决策裁剪（仅 person + 2D 划区）。
+
+## 核心不变量（违反即架构崩塌 → BLOCKER）
+
+1. **`core/` 零平台依赖**：无 cv2、无 TensorRT、无 snap7、无 PySide6；仅纯 Python + numpy。平台细节只在适配器层。
+2. **检测 / IO 不在 UI 线程**：推理在后台线程（如 `InferenceWorker`）；UI 只经 `FrameBridge` / Qt 信号收展示数据。
+3. **`.engine` 只在 Jetson 本机编译**；跨机只传 ONNX。禁止把 engine 当可移植产物。
+4. **信号语义**：本系统 `signal` 为 `-1/0/1/2`；旧版 `result_code` 禁止直写 PLC / 混用；须经 SignalAdapter。
+5. **Bootstrap ≠ 安全验收**：STOCK/COCO 模型须 UI 标识「STOCK · 集成测试 · 未过场内验收」；微调模型必过场内冻结集召回闸（阶段三）。
+6. **帧入缓冲必须 `.copy()`**：禁止共享 numpy view 被采集线程复写污染。
+7. **PLC 真机进程隔离**（阶段二真机）；Bootstrap 可用仿真，状态栏仍显示拟写入 INT16。
+8. **迁移以 MIGRATION_SPEC F ID 追踪**；深度/权限/`windows_studio` 不阻塞 M-Bootstrap。
+
+## 逻辑分层
+
+```
+ui/（PySide6 运行 UI · Jetson）
+    ↑ Qt 信号 / FrameBridge
+app/（编排：pipeline · worker · RunController）
+    ↑
+适配器：detect/ · camera/ · plc/ · record/
+    ↑
+core/（判区 · FSM · 后处理 · 跟踪 · 配置 · 纯 Python+numpy）
+```
+
+## 仓库目录
+
+```
+core/            # 平台无关核心（单测主战场）
+detect/          # 推理后端（Jetson: trt_backend；Win 可选 onnx）
+camera/          # video_file / v4l2_usb
+plc/             # snap7 gateway（仿真 → 真机）
+record/          # 快照 + 短片段
+ui/              # Jetson 运行 UI
+app/             # 编排与入口
+jetson_update/   # 阶段三：收 ONNX → engine → 验收 → 热切换
+windows_studio/  # 阶段三：Win GPU 标注训练闭环
+docs/            # 设计 / 执行 / 验证 / 决策 / MIGRATION_SPEC
+tests/
+tools/
+```
+
+## 技术栈
+
+| 层 | 选型 |
+|----|------|
+| 推理 | TensorRT FP16 engine（YOLOv8s）；ONNX 仅导出/对照 |
+| 视觉 | OpenCV（JetPack GStreamer）+ numpy |
+| PLC | python-snap7 ≥ 3.0（S7-1200/1500） |
+| UI | PySide6（Qt6） |
+| 训练 | Ultralytics YOLO（Win CUDA，阶段三） |
+
+## 里程碑路线
+
+| 阶段 | 状态 | 要点 |
+|------|------|------|
+| 阶段一 | ✅ | core + TRT(M2) + pipeline CLI(M3) |
+| 阶段二 | ← 当前 | Sprint B / UI → **M-Bootstrap**；再 USB / PLC 真机 / 4 路 |
+| 阶段三 | 未开始 | 场内冻结集 + jetson_update + windows_studio |
+
+**当前进度锚点**：Sprint UI-1（主窗口骨架 + 后台推理）已落地；下一刀 **Sprint UI-2（划区编辑 + config 保存）→ M-Bootstrap**。
+
+任务单元用 **执行方案 Sprint（B1–B6、2.x）或 MIGRATION F ID**，不用 substrate 式 `#NN`。
+
+## 文档 SSOT
+
+| 文档 | 用途 |
+|------|------|
+| `docs/安全区入侵检测系统_设计方案.md` | 架构与子系统设计 |
+| `docs/安全区入侵检测系统_执行方案.md` | Sprint / 验收 / 行动清单 |
+| `docs/MIGRATION_SPEC.md` | F01–F38、旧 UI §13、信号对照 |
+| `docs/validation_phases.md` | Bootstrap / Production 验收清单 |
+| `docs/decisions.md` | 产品决策 D1–D12（权威） |
+
+产品决策以 `docs/decisions.md` 为准；`.cursor/memory/decisions.md` 只记 harness / 落地取舍（见 `memory.mdc`）。

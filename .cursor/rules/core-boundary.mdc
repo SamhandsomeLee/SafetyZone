@@ -1,0 +1,58 @@
+---
+description: "core/ 与适配器层边界约束（宪法级）"
+alwaysApply: true
+---
+
+# core 边界清单
+
+`core/` 是平台无关业务核心；适配器与 UI 不得把平台细节渗入 core。违反边界即架构崩塌。
+
+## 允许在 core 实现
+
+- 判区几何（`zone`）、入侵状态机（`fsm`）
+- 后处理 / NMS / 类别过滤（`postprocess`）
+- 跟踪与漏检保持（`tracking`）
+- 配置加载 / 归一化 / 原子写（`config`）
+- 纯 Python + numpy 可单测的逻辑
+
+## 禁止在 core 做
+
+- `import cv2` / OpenCV
+- TensorRT / onnxruntime / ultralytics
+- `snap7` / 任何 PLC 库
+- PySide6 / Qt
+- 直接读相机设备、写录像文件、开网络套接字（业务 IO）
+- 依赖 Jetson 专用路径或 DISPLAY
+
+## 允许在适配器 / app / ui 实现
+
+| 层 | 职责 |
+|----|------|
+| `detect/` | Letterbox、TRT/ONNX 推理、画框辅助 |
+| `camera/` | V4L2/GStreamer、视频文件源、`.copy()`、Watchdog |
+| `plc/` | snap7、仿真模式、进程隔离 Gateway |
+| `record/` | 环形预录、快照、短片段 |
+| `app/` | pipeline 编排、InferenceWorker、FrameBridge、RunController |
+| `ui/` | PySide6 展示、划区交互、配置对话框（不跑推理） |
+
+## 信号与旧版对照（禁止混用）
+
+| 旧 `result_code` | 新 `signal` | 含义 |
+|------------------|-------------|------|
+| 0 OK | -1 | 安全 / 区内无目标 |
+| 1 SLOW | 1 | SLOW 确认 |
+| 2 STOP | 2 | STOP 确认 |
+| — | 0 | 有入侵未确认（过渡，新版独有） |
+| 3 故障 | -1（fault 分支） | UI 宜单独显示 FAULT |
+
+PLC / UI 层须经 **SignalAdapter**（或等价映射），禁止把旧数值直接写入新 PLC 映射。
+
+## 模型与验收边界
+
+- stock COCO engine：仅 Bootstrap 集成验证；须 STOCK 标识。
+- 微调模型上线：必须 `jetson_update` 场内冻结集 acceptance（阶段三）；core 不实现验收闸。
+- `windows_studio` / 训练 UI **不**迁入 Jetson `ui/`。
+
+## 不可编辑宪法
+
+本文件核心条款、`project-overview.mdc` 核心不变量、`git-ruiles.mdc`「合入主分支须用户审批」——位于 harness 自改循环之外；`harness-reviewer` 不得建议削弱这些条款。

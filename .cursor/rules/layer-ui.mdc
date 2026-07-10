@@ -1,0 +1,33 @@
+---
+description: "PySide6 运行 UI 约定（Jetson）"
+globs:
+  - "ui/**"
+---
+
+# 运行 UI（ui）
+
+## 布局基准
+
+对照 `docs/MIGRATION_SPEC.md` §13.1–13.3：菜单 + 工具栏 + 左侧相机列表 + 工位 Tab + 日志 + 状态栏。
+
+- **Sprint B / Phase A**：单工位最小集（预览、划区、启停、信号/报警、config 保存、STOCK 标识）
+- **Sprint 2.5+ / Phase B**：多工位 Tab、USB 绑定、PLC 配置窗等
+
+## 纪律
+
+- **只展示与交互**：不在 UI 模块内直接加载 TensorRT engine 或跑 pipeline 循环。
+- 经 `RunController` / 信号槽接收 `FramePayload`；刷新分频建议：视频 ~15FPS / 仪表盘 ~1FPS / 状态栏 ~2FPS。
+- 窗口标题或醒目位置必须能显示 **「STOCK · 集成测试 · 未过场内验收」**（Bootstrap）。
+- 信号显示用新版 `-1/0/1/2`；FAULT 与 SAFE 勿视觉混淆。
+- 划区编辑保存须走 `core.config` 原子写；参考分辨率与多边形一致。
+
+## Bootstrap 最小验收（validation_phases §1.3）
+
+监视预览、划区、运行/停止、信号、报警指示、视频文件源、STOCK 标识、PLC 仿真拟写入——缺一则未达 M-Bootstrap。
+
+## 不做（Bootstrap）
+
+- anomaly 示教（D1）
+- 深度/标定向导（Phase C）
+- 内嵌 YOLO Studio / 训练（F36 → `windows_studio`，阶段三）
+- 权限/审计完整实现（Phase D）
