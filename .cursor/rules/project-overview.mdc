@@ -71,9 +71,9 @@ tools/
 | 阶段二 | ← 当前 | Sprint B / UI → **M-Bootstrap**；再 USB / PLC 真机 / 4 路 |
 | 阶段三 | 未开始 | 场内冻结集 + jetson_update + windows_studio |
 
-**当前进度锚点**：Sprint UI-1（主窗口骨架 + 后台推理）已落地；下一刀 **Sprint UI-2（划区编辑 + config 保存）→ M-Bootstrap**。
+**当前进度锚点**：UI-1（#12）已落地；下一刀 **执行计划 #15（Wave 0 契约）→ #17 划区 → M-Bootstrap**。
 
-任务单元用 **执行方案 Sprint（B1–B6、2.x）或 MIGRATION F ID**，不用 substrate 式 `#NN`。
+任务单元用 **执行计划 commit `#NN`**（兼标 MIGRATION F ID）；见 `docs/安全区入侵检测系统_执行方案.md` v2.0。
 
 ## 文档 SSOT
 
