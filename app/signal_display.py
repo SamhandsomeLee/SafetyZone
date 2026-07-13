@@ -25,13 +25,7 @@ def signal_color_hex(signal: int, *, fault: bool = False) -> str:
 
 
 def plc_sim_value(signal: int, *, fault: bool = False) -> int:
-    """Bootstrap PLC simulation INT16 (design doc §6.4 subset)."""
-    if fault:
-        return -1
-    if signal == 2:
-        return 2
-    if signal == 1:
-        return 1
-    if signal == 0:
-        return 0
-    return 0
+    """Bootstrap PLC simulation INT16; delegates to SignalAdapter (D-008 / #23)."""
+    from app.signal_adapter import SignalAdapter
+
+    return SignalAdapter.to_plc_int16(signal, fault=fault)
