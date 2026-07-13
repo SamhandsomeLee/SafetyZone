@@ -1,1 +1,3 @@
 """Windows studio for debug personnel (local GPU training) — phase 3."""
+
+__all__ = ["app"]
