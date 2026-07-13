@@ -38,3 +38,20 @@ PYTHONPATH=. python -m jetson_update.build_engine --onnx model.onnx --out jetson
 - **输出**：默认 `jetson_update/candidates/<stem>.engine`。
 - **无 trtexec**：清晰报错；`--dry-run` 只打印命令并写占位标记（测试/CI）。
 - **receiver 可选接线**：`from jetson_update.build_engine import make_build_callback`。
+
+## acceptance（#49 / M9）
+
+冻结测试集召回率闸（设计方案 §8.3）。召回 < 阈值 → **拒绝**，不得热切换；≥ → 通过。
+
+```bash
+PYTHONPATH=. python -m jetson_update.acceptance \
+  --engine jetson_update/candidates/model.engine \
+  --testset jetson_update/testset \
+  [--threshold 0.95] [--dry-run]
+```
+
+- **阈值 D5**：`docs/decisions.md` 仍为「待现场共定」。未写入前默认 **`0.95` 占位**（`--threshold` / `AcceptanceConfig.recall_threshold` 可覆盖）。**M9 待现场填数后才算正式验收。**
+- **空冻结集**（`frames=[]`）：明确拒绝，不可宣称 M9 通过。
+- **`--dry-run`**：跳过推理，永不宣称生产通过（接线冒烟）。
+- **单测**：注入 `evaluate_fn` mock 召回；见 `tests/jetson_update/test_acceptance.py`。
+- **热切换**：本刀只出闸；`hotswap` 接线见 #50。
