@@ -15,6 +15,7 @@ from app.visualize import render_monitor_frame
 from camera.base import SourceType
 from core.config import AppConfig, load_config
 from detect.backend import create_backend
+from record.event_recorder import EventRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,13 @@ class InferenceWorker(QThread):
         if opened.degraded:
             logger.warning("%s", opened.message)
 
+        recorder = EventRecorder(
+            config=self._config.record,
+            output_dir=self._project_root / "records",
+            station_id=station.id,
+            save_on_slow=False,
+        )
+
         frame_index = 0
         run_t0 = time.perf_counter()
         is_video = stream.source_type == SourceType.VIDEO_FILE
@@ -125,6 +133,19 @@ class InferenceWorker(QThread):
                         frame_index=frame_index,
                         timestamp_ms=frame_index * (1000.0 / 15.0),
                     )
+                    # Snapshot on STOP rising edge; never block the loop on I/O errors.
+                    try:
+                        event = recorder.on_signal(signal, frame)
+                        if event is not None:
+                            logger.info(
+                                "alarm snapshot saved station=%s kind=%s path=%s",
+                                event.station_id,
+                                event.kind,
+                                event.path,
+                            )
+                    except Exception:  # pragma: no cover - keep inference alive
+                        logger.exception("event recorder failed")
+
                     infer_ms = (time.perf_counter() - t0) * 1000.0
                     elapsed = time.perf_counter() - run_t0
                     process_fps = (frame_index + 1) / elapsed if elapsed > 0 else 0.0
@@ -160,4 +181,5 @@ class InferenceWorker(QThread):
                     frame_index += 1
         finally:
             stream.stop()
+            recorder.reset()
             self._runner = None
