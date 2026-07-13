@@ -108,6 +108,7 @@
 
 - Bootstrap UI 验收 **不阻塞** 于 PLC 真机到货。
 - 仿真模式下状态栏/仪表盘仍须展示与 §6.3 一致的信号语义。
+- **配置契约（2026-07-13 / Wave0）**：`plc.enabled` + 待增 `plc.simulate`（默认 `true`）；`simulate=true` 或 `enabled=false` 时不连 snap7。拟写入 INT16 映射见 harness `D-008` / 执行计划 #20 SignalAdapter。Gateway 实现属 Wave 2，不阻塞 M-Bootstrap。
 
 ---
 

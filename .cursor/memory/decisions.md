@@ -45,3 +45,33 @@
 - 背景：真机只在现场调试；开发期不能阻塞。
 - 结论：默认 `simulate=true`；Gateway 抽象 + snap7 适配器可加载；现场只改 config/清单。
 - 关联：执行计划 #25–#26、#32–#33
+
+### D-007 | Wave 0 四契约冻结（并行前 SSOT） | 2026-07-13 | Wave0/#15
+- 背景：Wave 1 多 lane 前必须钉死共享契约，禁止旁路各定一版。
+- 结论（四条）：
+  1. **FramePayload（Bootstrap）**：保持现字段 `station_id, frame_index, signal, zone_hit, detections, infer_ms, process_fps, fault, overlay_bgr`。**暂不**扩展 `plc_int16`；UI 拟写入由 `SignalAdapter.to_plc_int16(signal, fault=…)`（或等价）计算，状态栏调用（与 UI-1 `plc_sim_value` 同语义，#23 改委托 Adapter）。
+  2. **划区写回**：编辑结果写入当前工位绑定的 `ParamGroup.slow_polygon` / `stop_polygon`；`ref_width`/`ref_height` 为坐标参考分辨率；经 `core.config.save_config` 原子写+备份；坐标相对 ref，判区时再 `scale_polygon` 到帧。
+  3. **CameraStream**：USB（#24）与 `video_file` 均实现 `camera/base.py`：`start`/`stop`/`get_frame`；`get_frame()` **必须返回副本（`.copy()`）**；可选 `on_connection_changed` 供 USB 看门狗。
+  4. **PLC 仿真/真机边界**：开发默认仿真。契约字段：`plc.enabled`（已有）+ **`plc.simulate`（待 Wave2 写入 `PlcConfig`，默认 true）**。`simulate=true` 或 `enabled=false` → 不连 snap7，仅展示拟写入 INT16。Gateway 抽象 + snap7 适配器 + 独立进程属 Wave2 #25–#26；Bootstrap 不实现 Gateway。
+- 备选：Payload 内嵌 `plc_int16`——否（Bootstrap 避免改 `frame_bridge` 敏感面；Adapter 为 SSOT）。
+- 关联：执行计划 #15；`app/frame_bridge.py`；`core/config.py`；`camera/base.py`；D-006；validation §1.3
+
+### D-008 | SignalAdapter 映射表（signal → PLC INT16） | 2026-07-13 | Wave0/#15
+- 背景：旧 `result_code` 与新 `signal` 禁止混写 PLC；设计 §6.3/§6.4。
+- 结论：`SignalAdapter`（#20）为拟写入唯一映射 SSOT；与现 `plc_sim_value` 对齐：
+
+  | 条件 | PLC INT16 | 说明 |
+  |------|-----------|------|
+  | `fault=True` | -1 | 故障优先；UI 标 FAULT，勿当 SAFE |
+  | `signal==2` | 2 | STOP 确认 |
+  | `signal==1` | 1 | SLOW 确认 |
+  | `signal==0` 或 `-1` 或其他 | 0 | 安全侧（WARN 过渡与 SAFE 对 PLC 皆写 0） |
+
+  命令字无匹配工位等扩展值 `3` 属真机 Gateway 后期，Bootstrap Adapter 可不实现。
+- 备选：WARN(`0`) 单独映射非 0——否（§6.4 安全=0；与 UI-1 一致）。
+- 关联：#20、#23；`app/signal_display.py`；设计 §6.3/§6.4
+
+### D-009 | 进度锚点：Wave0 完成后下一刀 #17（UI-2 划区） | 2026-07-13 | Wave0/#15
+- 背景：D-004/D-005 锚定 #15；契约落地后旁路可开。
+- 结论：#15/#16 合入 master 后下一交付为脊梁 **#17 划区编辑**；旁路 #20/#21 可并行；#23 依赖 #20 合入。
+- 关联：执行计划进度表；`/parallel` 启动清单
