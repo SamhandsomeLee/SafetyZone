@@ -10,6 +10,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -28,6 +29,7 @@ from app.signal_display import STOCK_BADGE, plc_sim_value, signal_label
 from core.config import AppConfig, ConfigError, get_param_group, load_config, save_config, validate_config
 from ui.camera_panel import CameraPanel
 from ui.log_panel import LogPanel
+from ui.plc_dialog import PlcConfigDialog
 from ui.station_view import StationView
 
 logger = logging.getLogger(__name__)
@@ -70,16 +72,22 @@ class MainWindow(QMainWindow):
         self._build_central()
         self._build_status_bar()
         self._log_panel.install()
+        self._refresh_plc_status()
 
         logger.info("main window ready config=%s engine=%s", config_path, engine_path)
 
     def _build_menus(self) -> None:
         menubar = self.menuBar()
-        for title in ("系统", "工位", "相机", "PLC", "文件", "查看"):
+        for title in ("系统", "工位", "相机", "文件", "查看"):
             menu = menubar.addMenu(title)
             stub = QAction("（Sprint UI-2+）", self)
             stub.setEnabled(False)
             menu.addAction(stub)
+
+        plc_menu = menubar.addMenu("PLC")
+        plc_action = QAction("PLC 配置…", self)
+        plc_action.triggered.connect(self._on_open_plc_dialog)
+        plc_menu.addAction(plc_action)
 
     def _build_toolbar(self) -> None:
         bar = QToolBar("主工具栏")
@@ -164,6 +172,45 @@ class MainWindow(QMainWindow):
         for widget in (self._st_camera, self._st_comm, self._st_plc, self._st_program, self._st_signal):
             sb.addPermanentWidget(widget)
 
+    def _refresh_plc_status(self, *, last_int16: int | None = None) -> None:
+        plc = self._config.plc
+        if plc.simulate or not plc.enabled:
+            self._st_comm.setText("通讯: 仿真")
+            if last_int16 is not None:
+                self._st_plc.setText(f"PLC: 拟写入 {last_int16}")
+            elif plc.enabled:
+                self._st_plc.setText("PLC: 仿真·已启用")
+            else:
+                self._st_plc.setText("PLC: 仿真")
+        else:
+            self._st_comm.setText("通讯: 真机")
+            if last_int16 is not None:
+                self._st_plc.setText(f"PLC: 写入 {last_int16}")
+            else:
+                self._st_plc.setText("PLC: 真机·待连接")
+
+    def _on_open_plc_dialog(self) -> None:
+        dlg = PlcConfigDialog(
+            config=self._config,
+            config_path=self._config_path,
+            parent=self,
+        )
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        saved = dlg.plc_config()
+        if saved is None:
+            return
+        self._config = load_config(self._config_path)
+        self._run.reload_plc_config(saved)
+        self._refresh_plc_status()
+        logger.info(
+            "plc config saved simulate=%s enabled=%s ip=%s",
+            saved.simulate,
+            saved.enabled,
+            saved.ip,
+        )
+        QMessageBox.information(self, "已保存", "PLC 配置已写入 config。")
+
     def _on_start(self) -> None:
         if not self._apply_editor_zones(persist=False):
             return
@@ -198,7 +245,7 @@ class MainWindow(QMainWindow):
         self._st_program.setText("程序: 待启动")
         self._st_camera.setText("相机: 待机")
         self._st_signal.setText("状态: —")
-        self._st_plc.setText("PLC: 仿真")
+        self._refresh_plc_status()
         logger.info("detection stopped")
 
     def _on_source_opened(
@@ -272,7 +319,10 @@ class MainWindow(QMainWindow):
         label = signal_label(payload.signal, fault=payload.fault)
         sim = plc_sim_value(payload.signal, fault=payload.fault)
         self._st_signal.setText(f"状态: {payload.station_id} signal={payload.signal}({label})")
-        self._st_plc.setText(f"PLC: 拟写入 {sim}")
+        self._run.write_plc_signal(payload.signal, fault=payload.fault)
+        status = self._run.poll_plc_status()
+        last_int16 = status.last_plc_int16 if status is not None else sim
+        self._refresh_plc_status(last_int16=last_int16 if last_int16 is not None else sim)
 
     def _apply_editor_zones(self, *, persist: bool) -> bool:
         """Copy ZoneEditor polygons into in-memory config; optionally save to disk."""
