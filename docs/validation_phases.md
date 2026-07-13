@@ -145,8 +145,9 @@ python tools/jetson_infer_smoke.py --engine models/stock/yolov8s.engine
 |--------|----------|
 | **M8** | 场内冻结测试集锁定 + stock/当前 engine 基线指标 |
 | **M9** | jetson_update 验收闸生效 |
-| **M10** | windows_studio 四步向导可用 |
+| **M10** | windows_studio 四步向导**功能**可用（CLI/壳即可；#45） |
 | **M11** | E2E：难 case → 训练 → 下发 → 验收 → 热切换 → 回滚演练 |
+| **M12** | studio **可视化 UI**（三栏+复核+评估回环；#52–#54；AIDI 参考；不挡上线闸） |
 
 ---
 
