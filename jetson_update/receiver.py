@@ -2,8 +2,8 @@
 
 Windows studio (#44) drops **only** ``.onnx`` into the Jetson inbox.
 This module scans (or polls) that directory, validates candidates, invokes a
-callback (stub for #48/#49 chain), and marks files processed so they are not
-re-triggered.
+callback (default stub; opt-in ``make_build_callback`` from #48; full chain #49),
+and marks files processed so they are not re-triggered.
 
 Default inbox
 -------------
@@ -64,7 +64,12 @@ def default_inbox_path(repo_root: Path | None = None) -> Path:
 
 
 def on_onnx_received(path: Path) -> None:
-    """Stub callback for #48/#49: log that an ONNX was received."""
+    """Default stub callback: log that an ONNX was received.
+
+    To compile immediately, pass ``make_build_callback()`` from
+    ``jetson_update.build_engine`` (#48). Full inbox → build → acceptance
+    chain is wired in #49.
+    """
     logger.info("ONNX received (stub): %s", path)
     print(f"[jetson_update.receiver] ONNX received: {path}", flush=True)
 
