@@ -4,8 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+from pathlib import Path
 from textwrap import dedent
+
+from windows_studio.wizard import WizardConfig, run_wizard
 
 WIZARD_STEPS: tuple[tuple[str, str], ...] = (
     (
@@ -18,7 +22,7 @@ WIZARD_STEPS: tuple[tuple[str, str], ...] = (
     ),
     (
         "3. 微调训练",
-        "本机 NVIDIA GPU 运行 YOLO 微调（train；#43）。",
+        "本机 NVIDIA GPU 运行 YOLO 微调（train；#43）；dataset 负责 train/test 隔离（#42）。",
     ),
     (
         "4. 导出并下发",
@@ -31,33 +35,56 @@ BANNER = dedent(
     SafetyZone Windows Studio — 调试人员 GPU 训练闭环（阶段三）
     ============================================================
     运行于 Windows 11 + NVIDIA GPU；不依赖 Jetson 运行 UI。
-    当前为空壳占位（#28）；四步向导将在 #45 串联。
+    四步向导已串联（#45）；默认 dry-run 可在无 GPU 环境冒烟。
     """
 ).strip()
 
 
-def format_wizard_placeholder() -> str:
-    lines = [BANNER, "", "四步向导（占位）:", ""]
+def format_wizard_banner() -> str:
+    lines = [BANNER, "", "四步向导:", ""]
     for title, detail in WIZARD_STEPS:
         lines.append(f"  [{title}]")
         lines.append(f"    {detail}")
         lines.append("")
     lines.append("子模块: ingest · review_ui · dataset · train · export_send")
+    lines.append("启动: python -m windows_studio.app --run")
     return "\n".join(lines)
 
 
-def run_cli() -> int:
-    print(format_wizard_placeholder())
+def run_cli_run(config: WizardConfig) -> int:
+    print(format_wizard_banner())
+    print("\n--- running wizard ---\n", file=sys.stderr)
+    try:
+        result = run_wizard(config)
+    except Exception as exc:  # noqa: BLE001 — surface wizard failure to CLI user
+        print(f"ERROR: wizard failed: {exc}", file=sys.stderr)
+        return 1
+
+    print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+    print(f"\n{result.message}", file=sys.stderr)
+    return 0 if result.success else 1
+
+
+def run_cli_info() -> int:
+    print(format_wizard_banner())
     return 0
 
 
-def run_gui() -> int:
+def run_gui(config: WizardConfig) -> int:
     try:
-        from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QVBoxLayout, QWidget
+        from PySide6.QtWidgets import (
+            QApplication,
+            QLabel,
+            QMainWindow,
+            QMessageBox,
+            QPushButton,
+            QVBoxLayout,
+            QWidget,
+        )
     except ImportError:
         print(
             "ERROR: PySide6 required for GUI mode. "
-            "Use CLI (default) or: pip install -e \".[windows]\"",
+            "Use CLI: python -m windows_studio.app --run",
             file=sys.stderr,
         )
         return 1
@@ -65,33 +92,97 @@ def run_gui() -> int:
     app = QApplication(sys.argv)
     window = QMainWindow()
     window.setWindowTitle("SafetyZone Windows Studio")
-    window.resize(640, 480)
+    window.resize(720, 520)
 
     central = QWidget()
     layout = QVBoxLayout(central)
-    label = QLabel(format_wizard_placeholder().replace("\n", "<br>"))
+    label = QLabel(format_wizard_banner().replace("\n", "<br>"))
     label.setWordWrap(True)
     layout.addWidget(label)
+
+    status = QLabel("点击「运行向导」开始（默认 dry-run）")
+    layout.addWidget(status)
+
+    def on_run() -> None:
+        status.setText("运行中…")
+        app.processEvents()
+        try:
+            result = run_wizard(config)
+            msg = result.message
+            if result.success:
+                QMessageBox.information(window, "向导完成", msg)
+            else:
+                QMessageBox.warning(window, "向导失败", msg)
+            status.setText(msg)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(window, "错误", str(exc))
+            status.setText(f"失败: {exc}")
+
+    btn = QPushButton("运行向导")
+    btn.clicked.connect(on_run)
+    layout.addWidget(btn)
+
     window.setCentralWidget(central)
     window.show()
-
     return app.exec()
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="SafetyZone Windows Studio — GPU fine-tuning wizard (phase 3 shell)",
+        description="SafetyZone Windows Studio — GPU fine-tuning wizard",
+    )
+    parser.add_argument(
+        "--run",
+        action="store_true",
+        help="Run full ingest→review→train→export wizard (default dry-run)",
+    )
+    parser.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path("windows_studio_data"),
+        help="Studio workspace root",
+    )
+    parser.add_argument(
+        "--outbox",
+        default="",
+        help="Jetson outbox local path or rsync://user@host:/path/outbox",
+    )
+    parser.add_argument(
+        "--inbox",
+        default="",
+        help="Jetson inbox local path or rsync://user@host:/path/inbox",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=1,
+        help="Training epochs (wizard uses 1 for smoke)",
+    )
+    parser.add_argument(
+        "--real",
+        action="store_true",
+        help="Attempt real CUDA train + ONNX export (requires Windows GPU stack)",
     )
     parser.add_argument(
         "--gui",
         action="store_true",
-        help="Launch empty placeholder window (requires PySide6; default is CLI)",
+        help="Launch wizard GUI (requires PySide6)",
     )
     args = parser.parse_args(argv)
 
+    config = WizardConfig(
+        workspace=args.workspace,
+        outbox_source=args.outbox,
+        inbox_target=args.inbox,
+        dry_run=not args.real,
+        epochs=args.epochs,
+    )
+
     if args.gui:
-        return run_gui()
-    return run_cli()
+        return run_gui(config)
+    if args.run:
+        return run_cli_run(config)
+    return run_cli_info()
 
 
 if __name__ == "__main__":

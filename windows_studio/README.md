@@ -26,23 +26,37 @@ windows_studio/
 
 ## 启动
 
-默认 **CLI**，打印四步向导占位并退出码 0（可在无 GPU / 无 PySide6 环境冒烟）：
+默认 **CLI** 打印四步向导说明；加 `--run` 可走通整条链路（默认 dry-run，无 GPU 可冒烟）：
 
 ```bash
-python -m windows_studio.app
+python -m windows_studio.app              # 说明
+python -m windows_studio.app --run        # 干跑 ingest→review→train→export→inbox
+python -m windows_studio.app --run --outbox /path/to/outbox --inbox /path/to/inbox
+python -m windows_studio.app --run --real # 需 Windows GPU + ultralytics（真训/真导出）
 ```
 
-可选空窗口（需 PySide6）：
+可选 GUI（需 PySide6）：
 
 ```bash
 python -m windows_studio.app --gui
 ```
 
-## 四步向导（占位 → #45 串联）
+各子模块亦可单独调用：
+
+```bash
+python -m windows_studio.ingest.cli pull --source /path/outbox
+python -m windows_studio.review_ui.cli --auto-confirm
+python -m windows_studio.dataset.cli build
+python -m windows_studio.train.cli --dry-run
+python -m windows_studio.export_send.cli export --weights runs/.../best.pt --dry-run
+python -m windows_studio.export_send.cli send --onnx export/model.onnx --inbox /path/inbox
+```
+
+## 四步向导（#45 已串联）
 
 1. **拉取难 case** — `ingest`：配置 outbox 路径或 rsync，列出待复核样本。
 2. **复核标注** — `review_ui`：确认 / 改框 / 删 / 补预标注。
 3. **微调训练** — `train`：本机 GPU `yolo train`；`dataset` 负责 train/test 物理隔离。
 4. **导出并下发** — `export_send`：导出 ONNX，送入 Jetson inbox（不传 `.engine`）。
 
-当前 commit **#28** 仅提供包结构与入口占位；各子包为空的 `__init__.py`，不依赖 Jetson `ui/` / `app/`。
+当前 **#40–#45** 已落地各子包与向导串联；不依赖 Jetson `ui/` / `app/`。
