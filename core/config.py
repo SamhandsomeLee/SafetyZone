@@ -56,6 +56,7 @@ class StationConfig:
 @dataclass
 class PlcConfig:
     enabled: bool = False
+    simulate: bool = True
     ip: str = "192.168.0.10"
     rack: int = 0
     slot: int = 1
@@ -183,6 +184,7 @@ def _parse_plc(raw: dict[str, Any] | None) -> PlcConfig:
         return PlcConfig()
     return PlcConfig(
         enabled=bool(raw.get("enabled", False)),
+        simulate=bool(raw.get("simulate", True)),
         ip=str(raw.get("ip", "192.168.0.10")),
         rack=int(raw.get("rack", 0)),
         slot=int(raw.get("slot", 1)),

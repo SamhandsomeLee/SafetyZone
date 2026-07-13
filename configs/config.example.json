@@ -41,6 +41,7 @@
   ],
   "plc": {
     "enabled": false,
+    "simulate": true,
     "ip": "192.168.0.10",
     "rack": 0,
     "slot": 1,
