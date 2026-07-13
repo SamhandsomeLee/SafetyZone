@@ -10,6 +10,8 @@ from PySide6.QtCore import QObject
 
 from app.inference_worker import InferenceWorker
 from core.config import AppConfig, PlcConfig, load_config
+from jetson_update.acceptance import AcceptanceConfig, AcceptanceResult, EvaluateFn
+from jetson_update.hotswap import HotswapResult
 from plc.process_worker import PlcProcessGateway
 
 logger = logging.getLogger(__name__)
@@ -29,7 +31,7 @@ class RunController(QObject):
     ) -> None:
         super().__init__(parent)
         self._config = config
-        self._engine_path = engine_path
+        self._engine_path = Path(engine_path)
         self._station_id = station_id
         self._project_root = project_root
         self._worker: InferenceWorker | None = None
@@ -40,8 +42,57 @@ class RunController(QObject):
         return self._worker
 
     @property
+    def engine_path(self) -> Path:
+        """Path of the currently intended / last-known active engine."""
+        return self._engine_path
+
+    @property
     def is_running(self) -> bool:
         return self._worker is not None and self._worker.isRunning()
+
+    def promote_engine(
+        self,
+        candidate_path: str | Path,
+        *,
+        acceptance: AcceptanceResult | None = None,
+        acceptance_config: AcceptanceConfig | None = None,
+        evaluate_fn: EvaluateFn | None = None,
+        dry_run: bool = False,
+        warmup_n: int = 3,
+    ) -> HotswapResult:
+        """Promote candidate on the live worker backend (#50). Fail → keep old."""
+        worker = self._worker
+        if worker is None or not worker.isRunning():
+            return HotswapResult(
+                switched=False,
+                reason="detection not running; cannot hotswap",
+                active_path=self._engine_path,
+            )
+        result = worker.promote_engine(
+            candidate_path,
+            acceptance=acceptance,
+            acceptance_config=acceptance_config,
+            evaluate_fn=evaluate_fn,
+            dry_run=dry_run,
+            warmup_n=warmup_n,
+        )
+        if result.switched and result.active_path is not None:
+            self._engine_path = Path(result.active_path)
+        return result
+
+    def rollback_engine(self) -> HotswapResult:
+        """Rollback live worker engine to the previous committed version."""
+        worker = self._worker
+        if worker is None or not worker.isRunning():
+            return HotswapResult(
+                switched=False,
+                reason="detection not running; cannot rollback",
+                active_path=self._engine_path,
+            )
+        result = worker.rollback_engine()
+        if result.switched and result.active_path is not None:
+            self._engine_path = Path(result.active_path)
+        return result
 
     def _resolve_config(self) -> AppConfig:
         if isinstance(self._config, AppConfig):

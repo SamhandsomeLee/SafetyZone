@@ -14,7 +14,9 @@ from app.pipeline import StationRunner, resolve_station
 from app.visualize import render_monitor_frame
 from camera.base import SourceType
 from core.config import AppConfig, load_config
-from detect.backend import create_backend
+from detect.hotswap import EngineHotSwap, create_hotswap
+from jetson_update.acceptance import AcceptanceConfig, AcceptanceResult, EvaluateFn
+from jetson_update.hotswap import HotswapResult, RuntimeHotswap
 from record.event_recorder import EventRecorder
 
 logger = logging.getLogger(__name__)
@@ -49,6 +51,56 @@ class InferenceWorker(QThread):
         self._project_root = project_root or Path.cwd()
         self._stop_requested = False
         self._runner: StationRunner | None = None
+        self._hotswap: EngineHotSwap | None = None
+
+    @property
+    def hotswap(self) -> EngineHotSwap | None:
+        """Live ``EngineHotSwap`` while the worker loop is running."""
+        return self._hotswap
+
+    def promote_engine(
+        self,
+        candidate_path: str | Path,
+        *,
+        acceptance: AcceptanceResult | None = None,
+        acceptance_config: AcceptanceConfig | None = None,
+        evaluate_fn: EvaluateFn | None = None,
+        dry_run: bool = False,
+        warmup_n: int = 3,
+    ) -> HotswapResult:
+        """Acceptance-gated promote on the live backend (#50). Fail → keep old."""
+        engine = self._hotswap
+        if engine is None:
+            return HotswapResult(
+                switched=False,
+                reason="inference worker has no live EngineHotSwap",
+                active_path=None,
+            )
+        result = RuntimeHotswap(engine).promote(
+            candidate_path,
+            acceptance=acceptance,
+            acceptance_config=acceptance_config,
+            evaluate_fn=evaluate_fn,
+            dry_run=dry_run,
+            warmup_n=warmup_n,
+        )
+        if result.switched and result.active_path is not None:
+            self._engine_path = Path(result.active_path)
+        return result
+
+    def rollback_engine(self) -> HotswapResult:
+        """Rollback to the previous engine after a successful promote."""
+        engine = self._hotswap
+        if engine is None:
+            return HotswapResult(
+                switched=False,
+                reason="inference worker has no live EngineHotSwap",
+                active_path=None,
+            )
+        result = RuntimeHotswap(engine).rollback()
+        if result.switched and result.active_path is not None:
+            self._engine_path = Path(result.active_path)
+        return result
 
     def request_stop(self) -> None:
         self._stop_requested = True
@@ -113,7 +165,9 @@ class InferenceWorker(QThread):
         video_loop = bool(getattr(effective, "loop", True)) if is_video else True
 
         try:
-            with create_backend("tensorrt", self._engine_path) as backend:
+            # EngineHotSwap so #50 acceptance promote/rollback can target live infer.
+            with create_hotswap("tensorrt", self._engine_path) as backend:
+                self._hotswap = backend
                 backend.warmup(2)
                 while not self._stop_requested:
                     t0 = time.perf_counter()
@@ -180,6 +234,7 @@ class InferenceWorker(QThread):
                     self.frame_ready.emit(payload)
                     frame_index += 1
         finally:
+            self._hotswap = None
             stream.stop()
             recorder.reset()
             self._runner = None

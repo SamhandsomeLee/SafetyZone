@@ -117,7 +117,7 @@ class AcceptanceResult:
 
     @property
     def allows_hotswap(self) -> bool:
-        """True only when the recall gate passed (wire in #50)."""
+        """True only when the recall gate passed (consumed by #50 hotswap)."""
         return self.passed
 
 
@@ -467,7 +467,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     print(f"reason: {result.reason}", flush=True)
     if result.allows_hotswap:
-        print("hotswap: allowed (wire in #50)", flush=True)
+        print("hotswap: allowed (jetson_update.hotswap / #50)", flush=True)
     else:
         print("hotswap: forbidden", flush=True)
     return 0 if result.passed else 1

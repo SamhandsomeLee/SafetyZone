@@ -54,4 +54,18 @@ PYTHONPATH=. python -m jetson_update.acceptance \
 - **空冻结集**（`frames=[]`）：明确拒绝，不可宣称 M9 通过。
 - **`--dry-run`**：跳过推理，永不宣称生产通过（接线冒烟）。
 - **单测**：注入 `evaluate_fn` mock 召回；见 `tests/jetson_update/test_acceptance.py`。
-- **热切换**：本刀只出闸；`hotswap` 接线见 #50。
+- **热切换**：通过后由 #50 `hotswap` 接线；未通过不得切换。
+
+## hotswap（#50）
+
+Acceptance 通过后才对运行中 `EngineHotSwap` 做 prepare → warmup → commit；失败保留旧版；支持 rollback。
+
+```python
+from jetson_update.hotswap import RuntimeHotswap, promote_if_accepted
+
+result = promote_if_accepted(engine_hotswap, candidate_path, acceptance=acceptance_result)
+# 或 RuntimeHotswap(engine).promote(..., acceptance_config=..., evaluate_fn=mock)
+# RuntimeHotswap(engine).rollback()
+```
+
+运行路径：`InferenceWorker` / `RunController` 持有 `EngineHotSwap`，暴露 `promote_engine` / `rollback_engine`（不必经 GUI）。
