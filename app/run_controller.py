@@ -111,6 +111,13 @@ class RunController(QObject):
             return None
         return gw.poll_status()
 
+    def set_station_id(self, station_id: str | None) -> None:
+        """Select which station the next start() will run (ignored while running)."""
+        if self.is_running:
+            raise RuntimeError("cannot change station while detection is running")
+        self._station_id = station_id
+        logger.info("run controller station_id=%s", station_id)
+
     def start(self) -> InferenceWorker:
         if self.is_running:
             raise RuntimeError("detection already running")
