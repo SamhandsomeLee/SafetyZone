@@ -46,9 +46,24 @@ class InferenceWorker(QThread):
         self._station_id = station_id
         self._project_root = project_root or Path.cwd()
         self._stop_requested = False
+        self._runner: StationRunner | None = None
 
     def request_stop(self) -> None:
         self._stop_requested = True
+
+    def reload_config(self, config: AppConfig | None = None) -> None:
+        """Apply updated param groups while the worker loop is running."""
+        if config is not None:
+            self._config = config
+        elif self._config_path is not None:
+            self._config = load_config(self._config_path)
+        else:
+            return
+
+        if self._runner is not None:
+            _, param = resolve_station(self._config, self._station_id)
+            self._runner.param = param
+            logger.info("inference worker reloaded param group %s", param.id)
 
     def run(self) -> None:
         self._stop_requested = False
@@ -63,7 +78,9 @@ class InferenceWorker(QThread):
 
     def _run_loop(self) -> None:
         station, param = resolve_station(self._config, self._station_id)
-        runner = StationRunner(station=station, param=param)
+        self._runner = StationRunner(station=station, param=param)
+        runner = self._runner
+        param = runner.param
         video_path = resolve_video_path(self._config, station, root=self._project_root)
         loop = video_loop_for_station(self._config, station)
 
@@ -130,3 +147,4 @@ class InferenceWorker(QThread):
                     frame_index += 1
         finally:
             stream.stop()
+            self._runner = None
