@@ -8,11 +8,11 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
-from app.camera_source import resolve_video_path, video_loop_for_station
+from app.camera_source import open_source_for_station
 from app.frame_bridge import FramePayload
 from app.pipeline import StationRunner, resolve_station
 from app.visualize import render_monitor_frame
-from camera.video_file import VideoFileStream
+from camera.base import SourceType
 from core.config import AppConfig, load_config
 from detect.backend import create_backend
 
@@ -25,6 +25,7 @@ class InferenceWorker(QThread):
     frame_ready = Signal(object)
     error_occurred = Signal(str)
     running_changed = Signal(bool)
+    source_opened = Signal(str, str, bool, str)  # camera_id, source_type, degraded, message
 
     def __init__(
         self,
@@ -80,19 +81,28 @@ class InferenceWorker(QThread):
         station, param = resolve_station(self._config, self._station_id)
         self._runner = StationRunner(station=station, param=param)
         runner = self._runner
-        video_path = resolve_video_path(self._config, station, root=self._project_root)
-        loop = video_loop_for_station(self._config, station)
 
-        if not video_path.is_file():
-            raise FileNotFoundError(f"video not found: {video_path}")
+        opened = open_source_for_station(self._config, station, root=self._project_root)
+        stream = opened.stream
+        effective = opened.effective
+
         if not self._engine_path.is_file():
             raise FileNotFoundError(f"engine not found: {self._engine_path}")
 
-        stream = VideoFileStream(video_path, loop=loop)
         stream.start()
+        self.source_opened.emit(
+            effective.id,
+            str(effective.source_type),
+            opened.degraded,
+            opened.message or "",
+        )
+        if opened.degraded:
+            logger.warning("%s", opened.message)
 
         frame_index = 0
         run_t0 = time.perf_counter()
+        is_video = stream.source_type == SourceType.VIDEO_FILE
+        video_loop = bool(getattr(effective, "loop", True)) if is_video else True
 
         try:
             with create_backend("tensorrt", self._engine_path) as backend:
@@ -101,11 +111,11 @@ class InferenceWorker(QThread):
                     t0 = time.perf_counter()
                     frame = stream.get_frame()
                     if frame is None:
-                        if loop:
-                            continue
-                        break
+                        # USB / degraded wait; video EOF only ends when not looping.
+                        if is_video and not video_loop:
+                            break
+                        continue
 
-                    # Always read latest param (hot-reload after zone save).
                     param = runner.param
                     ref_size = (param.ref_width, param.ref_height)
 
@@ -119,7 +129,6 @@ class InferenceWorker(QThread):
                     elapsed = time.perf_counter() - run_t0
                     process_fps = (frame_index + 1) / elapsed if elapsed > 0 else 0.0
 
-                    # Zones are drawn by ZoneEditor overlay; avoid stale double polygons.
                     overlay = render_monitor_frame(
                         frame,
                         detections=detections,

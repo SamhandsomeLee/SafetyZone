@@ -135,6 +135,7 @@ class MainWindow(QMainWindow):
             project_root=self._project_root,
         )
         self._camera_panel.setFixedWidth(240)
+        self._camera_panel.apply_requested.connect(self._on_apply_camera_binding)
         body.addWidget(self._camera_panel)
 
         tabs = QTabWidget()
@@ -178,11 +179,13 @@ class MainWindow(QMainWindow):
         worker.frame_ready.connect(self._on_frame_ready)
         worker.error_occurred.connect(self._on_worker_error)
         worker.running_changed.connect(self._on_running_changed)
+        worker.source_opened.connect(self._on_source_opened)
 
         self._btn_start.setEnabled(False)
         self._btn_stop.setEnabled(True)
+        self._camera_panel.set_running(True)
         self._st_program.setText("程序: 运行中")
-        self._st_camera.setText("相机: 视频回放")
+        self._st_camera.setText("相机: 启动中…")
         logger.info("detection started")
 
     def _on_stop(self) -> None:
@@ -190,10 +193,62 @@ class MainWindow(QMainWindow):
         self._station_view.show_idle("已停止")
         self._btn_start.setEnabled(True)
         self._btn_stop.setEnabled(False)
+        self._camera_panel.set_running(False)
+        self._camera_panel.refresh(self._config)
         self._st_program.setText("程序: 待启动")
+        self._st_camera.setText("相机: 待机")
         self._st_signal.setText("状态: —")
         self._st_plc.setText("PLC: 仿真")
         logger.info("detection stopped")
+
+    def _on_source_opened(
+        self,
+        camera_id: str,
+        source_type: str,
+        degraded: bool,
+        message: str,
+    ) -> None:
+        if degraded:
+            self._st_camera.setText(f"相机: 降级→{camera_id}({source_type})")
+            self._camera_panel.refresh(
+                self._config,
+                opened_camera_id=camera_id,
+                opened_source_type=source_type,
+                degraded=True,
+                message=message,
+            )
+            if message:
+                QMessageBox.warning(self, "相机源已降级", message)
+        else:
+            label = "USB" if source_type == "usb" else "视频回放"
+            self._st_camera.setText(f"相机: {label}·{camera_id}")
+            self._camera_panel.refresh(
+                self._config,
+                opened_camera_id=camera_id,
+                opened_source_type=source_type,
+                degraded=False,
+            )
+
+    def _on_apply_camera_binding(self) -> None:
+        if self._run.is_running:
+            QMessageBox.warning(self, "无法切换", "请先停止检测，再切换输入源绑定。")
+            return
+        cam_id = self._camera_panel.selected_camera_id()
+        if not cam_id:
+            return
+        station, _ = resolve_station(self._config, self._station_id)
+        station.camera_id = cam_id
+        try:
+            validate_config(self._config)
+            save_config(self._config, self._config_path)
+            self._config = load_config(self._config_path)
+        except (ConfigError, OSError) as exc:
+            QMessageBox.warning(self, "保存绑定失败", str(exc))
+            return
+        self._run.reload_config(self._config)
+        self._camera_panel.refresh(self._config)
+        logger.info("camera binding saved station=%s camera_id=%s", station.id, cam_id)
+        QMessageBox.information(self, "已保存", f"工位 {station.id} 已绑定相机 {cam_id}。")
 
     def _on_running_changed(self, running: bool) -> None:
         if not running and not self._btn_start.isEnabled():
