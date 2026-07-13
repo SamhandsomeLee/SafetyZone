@@ -29,6 +29,7 @@ from app.signal_display import STOCK_BADGE, plc_sim_value, signal_label
 from core.config import AppConfig, ConfigError, get_param_group, load_config, save_config, validate_config
 from ui.camera_panel import CameraPanel
 from ui.log_panel import LogPanel
+from ui.param_group_dialog import ParamGroupDialog
 from ui.plc_dialog import PlcConfigDialog
 from ui.station_view import StationView
 
@@ -90,11 +91,16 @@ class MainWindow(QMainWindow):
 
     def _build_menus(self) -> None:
         menubar = self.menuBar()
-        for title in ("系统", "工位", "相机", "文件", "查看"):
+        for title in ("系统", "相机", "文件", "查看"):
             menu = menubar.addMenu(title)
             stub = QAction("（Sprint UI-2+）", self)
             stub.setEnabled(False)
             menu.addAction(stub)
+
+        station_menu = menubar.addMenu("工位")
+        param_action = QAction("参数组…", self)
+        param_action.triggered.connect(self._on_open_param_group_dialog)
+        station_menu.addAction(param_action)
 
         plc_menu = menubar.addMenu("PLC")
         plc_action = QAction("PLC 配置…", self)
@@ -137,6 +143,11 @@ class MainWindow(QMainWindow):
         save_zone.clicked.connect(self._on_save_zones)
         self._btn_save_zone = save_zone
         bar.addWidget(save_zone)
+
+        param_btn = QPushButton("参数组…")
+        param_btn.setToolTip("编辑召回组 / 精度组参数（设计 §5.3）")
+        param_btn.clicked.connect(self._on_open_param_group_dialog)
+        bar.addWidget(param_btn)
 
         badge = QLabel(f"  {STOCK_BADGE}  ")
         badge.setObjectName("stockBadge")
@@ -266,6 +277,38 @@ class MainWindow(QMainWindow):
                 self._st_plc.setText(f"PLC: 写入 {last_int16}")
             else:
                 self._st_plc.setText("PLC: 真机·待连接")
+
+    def _on_open_param_group_dialog(self) -> None:
+        station, param = resolve_station(self._config, self._station_id)
+        dlg = ParamGroupDialog(
+            config=self._config,
+            config_path=self._config_path,
+            param_group_id=param.id,
+            parent=self,
+        )
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        self._config = load_config(self._config_path)
+        self._run.reload_config(self._config)
+        # Refresh any StationView whose param_group was edited.
+        saved_id = dlg.saved_param_group_id()
+        for st in self._enabled_stations():
+            if saved_id is not None and st.param_group_id != saved_id:
+                continue
+            view = self._station_views.get(st.id)
+            if view is None:
+                continue
+            try:
+                pg = get_param_group(self._config, st.param_group_id)
+            except KeyError:
+                continue
+            view.set_param_group(pg)
+        logger.info(
+            "param group saved id=%s (station=%s)",
+            saved_id,
+            station.id,
+        )
+        QMessageBox.information(self, "已保存", "参数组已写入 config。")
 
     def _on_open_plc_dialog(self) -> None:
         dlg = PlcConfigDialog(
