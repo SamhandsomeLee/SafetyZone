@@ -22,9 +22,11 @@ def test_create_backend_defaults_to_simulate() -> None:
     assert isinstance(backend, SimulateBackend)
 
 
-def test_create_backend_snap7_path_not_implemented_yet() -> None:
-    with pytest.raises(NotImplementedError, match="snap7"):
-        create_backend(PlcConfig(enabled=True, simulate=False))
+def test_create_backend_uses_snap7_when_enabled_and_not_simulating() -> None:
+    from plc.snap7_backend import Snap7Backend
+
+    backend = create_backend(PlcConfig(enabled=True, simulate=False))
+    assert isinstance(backend, Snap7Backend)
 
 
 @pytest.mark.parametrize(

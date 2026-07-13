@@ -45,9 +45,12 @@
     "ip": "192.168.0.10",
     "rack": 0,
     "slot": 1,
+    "db_number": 1,
+    "result_offset": 0,
     "mode": "command",
     "watchdog_ms": 3000,
-    "offline_hold": true
+    "offline_hold": true,
+    "verify_readback": true
   },
   "record": {
     "pre_buffer_sec": 3,

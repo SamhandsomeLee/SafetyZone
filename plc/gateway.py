@@ -50,12 +50,11 @@ def should_use_snap7(config: PlcConfig) -> bool:
 
 
 def create_backend(config: PlcConfig) -> PlcBackend:
-    """Factory: simulate when disabled or simulating; snap7 wired in #26."""
+    """Factory: simulate when disabled or simulating; snap7 when enabled + real."""
     if should_use_snap7(config):
-        raise NotImplementedError(
-            "Real snap7 backend requires plc.snap7_backend (#26); "
-            "use simulate=true or enabled=false for development."
-        )
+        from plc.snap7_backend import Snap7Backend
+
+        return Snap7Backend(config)
 
     from plc.simulate import SimulateBackend
 
