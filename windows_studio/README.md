@@ -10,6 +10,8 @@
 | 训练 | 本机 GPU 运行 Ultralytics YOLO 微调（非云端 A100） |
 | 产物 | **仅 ONNX** 下发至 Jetson `jetson_update` inbox；`.engine` 只在 Jetson 本机编译 |
 
+Jetson 侧接收扫描见 `jetson_update/README.md` / `python -m jetson_update.receiver`（#47）。
+
 依赖可选组：`pip install -e ".[windows]"`（PySide6、ultralytics、onnxruntime-gpu 等）。
 
 ## 包结构（#28 空壳）
