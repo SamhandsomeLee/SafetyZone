@@ -1,0 +1,71 @@
+# `jetson_update` — Jetson 模型接收侧
+
+Windows studio 只下发 **ONNX**；本包在 Jetson 上完成 receiver → build_engine → acceptance → hotswap（阶段三）。
+
+## 目录约定
+
+| 路径 | 用途 | Commit |
+|------|------|--------|
+| `jetson_update/testset/` | 场内冻结测试集 + MANIFEST | #46 |
+| `jetson_update/inbox/` | studio 投放的待处理 `.onnx`（默认 inbox） | #47 |
+| `jetson_update/inbox/processed/` | 已触发管线的 ONNX（避免重复扫描） | #47 |
+| `jetson_update/candidates/` | 候选 FP16 `.engine`（`build_engine` 默认输出） | #48 |
+
+`inbox/` 与 `*.onnx` 默认被 `.gitignore` 忽略；板上路径可用 `--inbox` 覆盖。
+
+## Receiver（#47）
+
+```bash
+PYTHONPATH=. python -m jetson_update.receiver --once
+PYTHONPATH=. python -m jetson_update.receiver --inbox /path/to/inbox --watch --interval 2
+```
+
+- **投放**：与 `windows_studio.export_send.send` 一致——将完整 `.onnx` 拷入 inbox 根目录。
+- **可选完整标记**：若 inbox 中存在任意 `*.done`，则每个候选须有同名 sidecar（如 `model.onnx.done`）才触发。
+- **触发后**：文件移入 `inbox/processed/`；回调默认为 stub `on_onnx_received`。可选接线：`scan_once(..., callback=make_build_callback())`（#48）；完整管线串接见 #49。
+
+详见模块 docstring：`jetson_update/receiver.py`。
+
+## build_engine（#48）
+
+本机 `trtexec` 将 inbox/任意 ONNX 编为候选 FP16 engine（参数风格对齐 `tools/build_engine.sh`）。
+
+```bash
+PYTHONPATH=. python -m jetson_update.build_engine --onnx path/to/model.onnx
+PYTHONPATH=. python -m jetson_update.build_engine --onnx model.onnx --out jetson_update/candidates --dry-run
+```
+
+- **输出**：默认 `jetson_update/candidates/<stem>.engine`。
+- **无 trtexec**：清晰报错；`--dry-run` 只打印命令并写占位标记（测试/CI）。
+- **receiver 可选接线**：`from jetson_update.build_engine import make_build_callback`。
+
+## acceptance（#49 / M9）
+
+冻结测试集召回率闸（设计方案 §8.3）。召回 < 阈值 → **拒绝**，不得热切换；≥ → 通过。
+
+```bash
+PYTHONPATH=. python -m jetson_update.acceptance \
+  --engine jetson_update/candidates/model.engine \
+  --testset jetson_update/testset \
+  [--threshold 0.95] [--dry-run]
+```
+
+- **阈值 D5**：`docs/decisions.md` 仍为「待现场共定」。未写入前默认 **`0.95` 占位**（`--threshold` / `AcceptanceConfig.recall_threshold` 可覆盖）。**M9 待现场填数后才算正式验收。**
+- **空冻结集**（`frames=[]`）：明确拒绝，不可宣称 M9 通过。
+- **`--dry-run`**：跳过推理，永不宣称生产通过（接线冒烟）。
+- **单测**：注入 `evaluate_fn` mock 召回；见 `tests/jetson_update/test_acceptance.py`。
+- **热切换**：通过后由 #50 `hotswap` 接线；未通过不得切换。
+
+## hotswap（#50）
+
+Acceptance 通过后才对运行中 `EngineHotSwap` 做 prepare → warmup → commit；失败保留旧版；支持 rollback。
+
+```python
+from jetson_update.hotswap import RuntimeHotswap, promote_if_accepted
+
+result = promote_if_accepted(engine_hotswap, candidate_path, acceptance=acceptance_result)
+# 或 RuntimeHotswap(engine).promote(..., acceptance_config=..., evaluate_fn=mock)
+# RuntimeHotswap(engine).rollback()
+```
+
+运行路径：`InferenceWorker` / `RunController` 持有 `EngineHotSwap`，暴露 `promote_engine` / `rollback_engine`（不必经 GUI）。

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "locked": false,
+  "never_train": true,
+  "class_names": [
+    "person"
+  ],
+  "description": "Field frozen testset for Jetson FP16 recall acceptance (fill frames on site; then set locked=true).",
+  "created_at": "",
+  "frames": []
+}
