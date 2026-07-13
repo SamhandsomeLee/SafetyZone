@@ -25,7 +25,7 @@ from app.frame_bridge import FramePayload
 from app.pipeline import resolve_station
 from app.run_controller import RunController
 from app.signal_display import STOCK_BADGE, plc_sim_value, signal_label
-from core.config import AppConfig, load_config
+from core.config import AppConfig, ConfigError, get_param_group, load_config, save_config, validate_config
 from ui.camera_panel import CameraPanel
 from ui.log_panel import LogPanel
 from ui.station_view import StationView
@@ -114,8 +114,9 @@ class MainWindow(QMainWindow):
         bar.addWidget(calib)
 
         save_zone = QPushButton("保存当前工位划区")
-        save_zone.setEnabled(False)
-        save_zone.setToolTip("Sprint UI-2")
+        save_zone.setToolTip("将 slow/stop 多边形写入 config（相对 ref 坐标）")
+        save_zone.clicked.connect(self._on_save_zones)
+        self._btn_save_zone = save_zone
         bar.addWidget(save_zone)
 
         badge = QLabel(f"  {STOCK_BADGE}  ")
@@ -141,8 +142,8 @@ class MainWindow(QMainWindow):
         overview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         tabs.addTab(overview, "运行总览")
 
-        station, _ = resolve_station(self._config, self._station_id)
-        self._station_view = StationView(station_name=station.id)
+        station, param = resolve_station(self._config, self._station_id)
+        self._station_view = StationView(station_name=station.id, param_group=param)
         tabs.addTab(self._station_view, f"{station.id} · 监控")
         tabs.setCurrentIndex(1)
         body.addWidget(tabs, stretch=1)
@@ -214,6 +215,41 @@ class MainWindow(QMainWindow):
         sim = plc_sim_value(payload.signal, fault=payload.fault)
         self._st_signal.setText(f"状态: {payload.station_id} signal={payload.signal}({label})")
         self._st_plc.setText(f"PLC: 拟写入 {sim}")
+
+    def _on_save_zones(self) -> None:
+        slow, stop = self._station_view.get_polygons()
+        if len(slow) < 3 or len(stop) < 3:
+            QMessageBox.warning(
+                self,
+                "划区无效",
+                "SLOW 与 STOP 多边形各至少需要 3 个顶点。",
+            )
+            return
+
+        try:
+            station, _ = resolve_station(self._config, self._station_id)
+            param = get_param_group(self._config, station.param_group_id)
+            param.slow_polygon = slow
+            param.stop_polygon = stop
+            validate_config(self._config)
+            save_config(self._config, self._config_path)
+        except ConfigError as exc:
+            QMessageBox.warning(self, "保存失败", str(exc))
+            return
+        except OSError as exc:
+            QMessageBox.critical(self, "保存失败", str(exc))
+            return
+
+        self._config = load_config(self._config_path)
+        _, param = resolve_station(self._config, self._station_id)
+        self._station_view.set_param_group(param)
+        self._run.reload_config(self._config)
+        logger.info(
+            "saved zones for station=%s param_group=%s",
+            station.id,
+            param.id,
+        )
+        QMessageBox.information(self, "保存成功", f"工位 {station.id} 划区已写入配置。")
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self._run.stop()

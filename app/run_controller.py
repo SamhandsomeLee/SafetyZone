@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject
 
 from app.inference_worker import InferenceWorker
-from core.config import AppConfig
+from core.config import AppConfig, load_config
 
 logger = logging.getLogger(__name__)
 
@@ -66,3 +66,16 @@ class RunController(QObject):
                 worker.wait(2000)
         self._worker = None
         logger.info("inference worker stopped")
+
+    def reload_config(self, config: AppConfig | Path | str) -> None:
+        """Reload config; hot-update running worker param groups when possible."""
+        if isinstance(config, AppConfig):
+            cfg = config
+        else:
+            self._config = Path(config)
+            cfg = load_config(self._config)
+
+        worker = self._worker
+        if worker is not None:
+            worker.reload_config(cfg)
+        logger.info("run controller config reloaded")
