@@ -71,3 +71,50 @@ def test_station_view_exposes_polygons(qapp) -> None:
     slow2, stop2 = view.get_polygons()
     assert slow2 == [[1, 2], [3, 4], [5, 6]]
     assert stop2 == [[10, 20], [30, 40], [50, 60]]
+
+
+def test_zone_editor_left_click_appends_vertex(qapp) -> None:
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    from core.config import ParamGroup
+    from ui.zone_editor import ZoneEditor
+
+    param = ParamGroup(
+        id="pg0",
+        ref_width=640,
+        ref_height=480,
+        slow_polygon=[[10, 10], [100, 10], [100, 100]],
+        stop_polygon=[[200, 200], [300, 200], [300, 300]],
+    )
+    editor = ZoneEditor()
+    editor.resize(640, 480)
+    editor.show()
+    editor.set_param_group(param)
+    editor.set_frame_size((640, 480))
+    editor.set_active_zone("slow")
+
+    before = len(editor.get_polygons()[0])
+    # Click near center of display rect (away from existing vertices).
+    pos = QPointF(320, 240)
+    press = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        pos,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    editor.mousePressEvent(press)
+    release = QMouseEvent(
+        QMouseEvent.Type.MouseButtonRelease,
+        pos,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    editor.mouseReleaseEvent(release)
+
+    slow, _ = editor.get_polygons()
+    assert len(slow) == before + 1
+    assert abs(slow[-1][0] - 320) < 2
+    assert abs(slow[-1][1] - 240) < 2

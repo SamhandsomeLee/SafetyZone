@@ -51,6 +51,8 @@ class StationView(QWidget):
         self._video.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._video.setMinimumSize(640, 360)
         self._video.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # StackAll: current widget is raised and receives mouse; keep video below editor.
+        self._video.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
         self._zone_editor = ZoneEditor()
         self._zone_editor.set_param_group(self._param_group)
@@ -60,6 +62,8 @@ class StationView(QWidget):
         preview_stack.setStackingMode(QStackedLayout.StackingMode.StackAll)
         preview_stack.addWidget(self._video)
         preview_stack.addWidget(self._zone_editor)
+        # Raise zone editor so clicks hit vertices / add points (not the QLabel).
+        preview_stack.setCurrentWidget(self._zone_editor)
 
         self._btn_edit_slow = QPushButton("编辑 SLOW")
         self._btn_edit_slow.setCheckable(True)
