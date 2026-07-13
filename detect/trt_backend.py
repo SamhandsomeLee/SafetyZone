@@ -37,6 +37,11 @@ class TensorRTBackend(InferBackend):
         self._stream: object | None = None
         self._pin_batch: object | None = None
 
+    @property
+    def engine_path(self) -> Path | None:
+        """Path of the loaded engine (``None`` when closed)."""
+        return self._engine_path
+
     def load(self, model_path: str | Path) -> None:
         if trt is None:
             raise RuntimeError("tensorrt is not installed")
