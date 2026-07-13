@@ -67,6 +67,17 @@ def _best_zone_hit(
     return hit
 
 
+def infer_raw(
+    frame: np.ndarray,
+    *,
+    backend: InferBackend,
+) -> tuple[np.ndarray, LetterboxMeta]:
+    """Letterbox + backend infer once; shared by multi-station fan-out (#34)."""
+    batch, meta = preprocess_bgr(frame, input_size=backend.input_size)
+    raw = backend.infer_batch(batch)
+    return raw, meta
+
+
 @dataclass
 class StationRunner:
     station: StationConfig
@@ -81,16 +92,15 @@ class StationRunner:
         )
         self.hold = DetectionHold(hold_ms=float(self.param.hold_ms))
 
-    def process(
+    def process_from_raw(
         self,
-        frame: np.ndarray,
+        raw: np.ndarray,
+        meta: LetterboxMeta,
         *,
-        backend: InferBackend,
-        frame_index: int,
+        frame_size: tuple[int, int],
         timestamp_ms: float,
     ) -> tuple[int, ZoneHit, list[Detection], bool]:
-        batch, meta = preprocess_bgr(frame, input_size=backend.input_size)
-        raw = backend.infer_batch(batch)
+        """Per-station postprocess / zone / FSM from a shared infer result."""
         letterbox_dets = postprocess_yolo(
             raw,
             conf=self.param.conf,
@@ -101,7 +111,7 @@ class StationRunner:
         detections = scale_detections_to_frame(letterbox_dets, meta)
         detections = self.hold.apply(detections, timestamp_ms)
 
-        frame_h, frame_w = frame.shape[:2]
+        frame_w, frame_h = frame_size
         zone_hit = _best_zone_hit(
             detections,
             param=self.param,
@@ -110,6 +120,24 @@ class StationRunner:
         )
         signal = self.fsm.update(zone_hit)
         return signal, zone_hit, detections, False
+
+    def process(
+        self,
+        frame: np.ndarray,
+        *,
+        backend: InferBackend,
+        frame_index: int,
+        timestamp_ms: float,
+    ) -> tuple[int, ZoneHit, list[Detection], bool]:
+        del frame_index  # kept for API compatibility with callers
+        raw, meta = infer_raw(frame, backend=backend)
+        frame_h, frame_w = frame.shape[:2]
+        return self.process_from_raw(
+            raw,
+            meta,
+            frame_size=(frame_w, frame_h),
+            timestamp_ms=timestamp_ms,
+        )
 
     def set_fault(self, fault: bool) -> int:
         self.fsm.set_fault(fault)

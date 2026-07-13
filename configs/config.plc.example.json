@@ -1,0 +1,61 @@
+{
+  "cameras": [
+    {
+      "id": "cam0",
+      "source_type": "usb",
+      "device": "/dev/video0",
+      "label": "工位1相机"
+    },
+    {
+      "id": "replay0",
+      "source_type": "video_file",
+      "path": "data/sample_videos/demo.mp4",
+      "loop": true,
+      "label": "录制视频回放（调试用）"
+    }
+  ],
+  "param_groups": [
+    {
+      "id": "default",
+      "ref_width": 1920,
+      "ref_height": 1080,
+      "slow_polygon": [[100, 100], [800, 100], [800, 600], [100, 600]],
+      "stop_polygon": [[300, 200], [600, 200], [600, 500], [300, 500]],
+      "conf": 0.3,
+      "enter_frames": 2,
+      "exit_frames": 10,
+      "hold_ms": 400,
+      "min_overlap": 0.1,
+      "nms_iou": 0.45,
+      "min_box_area": 400
+    }
+  ],
+  "stations": [
+    {
+      "id": "station0",
+      "camera_id": "replay0",
+      "param_group_id": "default",
+      "detect_mode": "person",
+      "enabled": true
+    }
+  ],
+  "plc": {
+    "enabled": true,
+    "simulate": false,
+    "ip": "192.168.0.10",
+    "rack": 0,
+    "slot": 1,
+    "db_number": 1,
+    "result_offset": 0,
+    "mode": "command",
+    "watchdog_ms": 3000,
+    "offline_hold": true,
+    "verify_readback": true
+  },
+  "record": {
+    "pre_buffer_sec": 3,
+    "post_buffer_sec": 5,
+    "snapshot": true,
+    "short_clip": true
+  }
+}

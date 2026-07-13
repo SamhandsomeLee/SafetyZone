@@ -47,7 +47,7 @@ def test_save_zones_writes_config(qapp, tmp_path: Path, monkeypatch) -> None:
 
     new_slow = [[10, 10], [500, 10], [500, 400], [10, 400]]
     new_stop = [[120, 120], [380, 120], [380, 320], [120, 320]]
-    win._station_view.set_param_group(  # noqa: SLF001 — test hook
+    win._station_view().set_param_group(  # noqa: SLF001 — test hook
         ParamGroup(
             id="default",
             ref_width=1920,
@@ -64,6 +64,6 @@ def test_save_zones_writes_config(qapp, tmp_path: Path, monkeypatch) -> None:
     assert pg["slow_polygon"] == new_slow
     assert pg["stop_polygon"] == new_stop
 
-    reloaded_slow, reloaded_stop = win._station_view.get_polygons()  # noqa: SLF001
+    reloaded_slow, reloaded_stop = win._station_view().get_polygons()  # noqa: SLF001
     assert reloaded_slow == new_slow
     assert reloaded_stop == new_stop
