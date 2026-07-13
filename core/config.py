@@ -56,12 +56,16 @@ class StationConfig:
 @dataclass
 class PlcConfig:
     enabled: bool = False
+    simulate: bool = True
     ip: str = "192.168.0.10"
     rack: int = 0
     slot: int = 1
+    db_number: int = 1
+    result_offset: int = 0
     mode: PlcMode = "command"
     watchdog_ms: int = 3000
     offline_hold: bool = True
+    verify_readback: bool = True
 
 
 @dataclass
@@ -183,12 +187,16 @@ def _parse_plc(raw: dict[str, Any] | None) -> PlcConfig:
         return PlcConfig()
     return PlcConfig(
         enabled=bool(raw.get("enabled", False)),
+        simulate=bool(raw.get("simulate", True)),
         ip=str(raw.get("ip", "192.168.0.10")),
         rack=int(raw.get("rack", 0)),
         slot=int(raw.get("slot", 1)),
+        db_number=int(raw.get("db_number", 1)),
+        result_offset=int(raw.get("result_offset", 0)),
         mode=raw.get("mode", "command"),
         watchdog_ms=int(raw.get("watchdog_ms", 3000)),
         offline_hold=bool(raw.get("offline_hold", True)),
+        verify_readback=bool(raw.get("verify_readback", True)),
     )
 
 
