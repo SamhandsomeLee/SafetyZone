@@ -164,6 +164,9 @@ class MainWindow(QMainWindow):
             sb.addPermanentWidget(widget)
 
     def _on_start(self) -> None:
+        if not self._apply_editor_zones(persist=False):
+            return
+        self._run.reload_config(self._config)
         try:
             worker = self._run.start()
         except RuntimeError:
@@ -216,7 +219,8 @@ class MainWindow(QMainWindow):
         self._st_signal.setText(f"状态: {payload.station_id} signal={payload.signal}({label})")
         self._st_plc.setText(f"PLC: 拟写入 {sim}")
 
-    def _on_save_zones(self) -> None:
+    def _apply_editor_zones(self, *, persist: bool) -> bool:
+        """Copy ZoneEditor polygons into in-memory config; optionally save to disk."""
         slow, stop = self._station_view.get_polygons()
         if len(slow) < 3 or len(stop) < 3:
             QMessageBox.warning(
@@ -224,7 +228,7 @@ class MainWindow(QMainWindow):
                 "划区无效",
                 "SLOW 与 STOP 多边形各至少需要 3 个顶点。",
             )
-            return
+            return False
 
         try:
             station, _ = resolve_station(self._config, self._station_id)
@@ -232,22 +236,29 @@ class MainWindow(QMainWindow):
             param.slow_polygon = slow
             param.stop_polygon = stop
             validate_config(self._config)
-            save_config(self._config, self._config_path)
+            if persist:
+                save_config(self._config, self._config_path)
+                self._config = load_config(self._config_path)
+                _, param = resolve_station(self._config, self._station_id)
+                self._station_view.set_param_group(param)
         except ConfigError as exc:
-            QMessageBox.warning(self, "保存失败", str(exc))
-            return
+            QMessageBox.warning(self, "保存失败" if persist else "划区无效", str(exc))
+            return False
         except OSError as exc:
             QMessageBox.critical(self, "保存失败", str(exc))
+            return False
+        return True
+
+    def _on_save_zones(self) -> None:
+        station, _ = resolve_station(self._config, self._station_id)
+        if not self._apply_editor_zones(persist=True):
             return
 
-        self._config = load_config(self._config_path)
-        _, param = resolve_station(self._config, self._station_id)
-        self._station_view.set_param_group(param)
         self._run.reload_config(self._config)
         logger.info(
             "saved zones for station=%s param_group=%s",
             station.id,
-            param.id,
+            station.param_group_id,
         )
         QMessageBox.information(self, "保存成功", f"工位 {station.id} 划区已写入配置。")
 

@@ -40,11 +40,27 @@ class RunController(QObject):
     def is_running(self) -> bool:
         return self._worker is not None and self._worker.isRunning()
 
+    def reload_config(self, config: AppConfig | Path | str) -> None:
+        """Reload config; hot-update running worker param groups when possible."""
+        if isinstance(config, AppConfig):
+            self._config = config
+            cfg = config
+        else:
+            self._config = Path(config)
+            cfg = load_config(self._config)
+
+        worker = self._worker
+        if worker is not None:
+            worker.reload_config(cfg)
+        logger.info("run controller config reloaded")
+
     def start(self) -> InferenceWorker:
         if self.is_running:
             raise RuntimeError("detection already running")
+        # Prefer in-memory AppConfig (includes unsaved editor sync / last save).
+        config = self._config
         self._worker = InferenceWorker(
-            config=self._config,
+            config=config,
             engine_path=self._engine_path,
             station_id=self._station_id,
             project_root=self._project_root,
@@ -66,16 +82,3 @@ class RunController(QObject):
                 worker.wait(2000)
         self._worker = None
         logger.info("inference worker stopped")
-
-    def reload_config(self, config: AppConfig | Path | str) -> None:
-        """Reload config; hot-update running worker param groups when possible."""
-        if isinstance(config, AppConfig):
-            cfg = config
-        else:
-            self._config = Path(config)
-            cfg = load_config(self._config)
-
-        worker = self._worker
-        if worker is not None:
-            worker.reload_config(cfg)
-        logger.info("run controller config reloaded")

@@ -125,14 +125,16 @@ def render_monitor_frame(
     process_fps: float,
     fault: bool,
     draw_boxes: bool = True,
+    draw_zone_polygons: bool = True,
 ) -> np.ndarray:
     vis = frame.copy()
-    draw_zones(
-        vis,
-        slow_polygon=slow_polygon,
-        stop_polygon=stop_polygon,
-        ref_size=ref_size,
-    )
+    if draw_zone_polygons:
+        draw_zones(
+            vis,
+            slow_polygon=slow_polygon,
+            stop_polygon=stop_polygon,
+            ref_size=ref_size,
+        )
     if draw_boxes and detections:
         draw_detections_with_zones(
             vis,

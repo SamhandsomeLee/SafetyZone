@@ -80,7 +80,6 @@ class InferenceWorker(QThread):
         station, param = resolve_station(self._config, self._station_id)
         self._runner = StationRunner(station=station, param=param)
         runner = self._runner
-        param = runner.param
         video_path = resolve_video_path(self._config, station, root=self._project_root)
         loop = video_loop_for_station(self._config, station)
 
@@ -92,7 +91,6 @@ class InferenceWorker(QThread):
         stream = VideoFileStream(video_path, loop=loop)
         stream.start()
 
-        ref_size = (param.ref_width, param.ref_height)
         frame_index = 0
         run_t0 = time.perf_counter()
 
@@ -107,6 +105,10 @@ class InferenceWorker(QThread):
                             continue
                         break
 
+                    # Always read latest param (hot-reload after zone save).
+                    param = runner.param
+                    ref_size = (param.ref_width, param.ref_height)
+
                     signal, zone_hit, detections, fault = runner.process(
                         frame,
                         backend=backend,
@@ -117,6 +119,7 @@ class InferenceWorker(QThread):
                     elapsed = time.perf_counter() - run_t0
                     process_fps = (frame_index + 1) / elapsed if elapsed > 0 else 0.0
 
+                    # Zones are drawn by ZoneEditor overlay; avoid stale double polygons.
                     overlay = render_monitor_frame(
                         frame,
                         detections=detections,
@@ -130,6 +133,7 @@ class InferenceWorker(QThread):
                         infer_ms=infer_ms,
                         process_fps=process_fps,
                         fault=fault,
+                        draw_zone_polygons=False,
                     )
 
                     payload = FramePayload(
