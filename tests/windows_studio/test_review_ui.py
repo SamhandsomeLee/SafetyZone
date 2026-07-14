@@ -19,6 +19,7 @@ from windows_studio.review_ui import (
     apply_edit_command,
     build_review_queue,
     display_mode_caption,
+    filter_by_case_ids,
     filter_review_items,
     is_suspect_case,
     load_review_manifest,
@@ -113,6 +114,43 @@ def test_filter_review_items(tmp_path: Path) -> None:
     assert [i.case_id for i in filter_review_items(items, SampleFilter.CONFIRMED)] == ["ok"]
     assert [i.case_id for i in filter_review_items(items, SampleFilter.UNCONFIRMED)] == ["miss"]
     assert [i.case_id for i in filter_review_items(items, SampleFilter.SUSPECT)] == ["miss"]
+
+
+def test_filter_by_case_ids(tmp_path: Path) -> None:
+    review_dir = tmp_path / "review"
+    cases = [
+        _case("ok", tmp_path, with_label=True),
+        _case("miss", tmp_path, with_label=False, reason="missed_detection"),
+    ]
+    items = build_review_queue(cases, review_dir)
+    assert [i.case_id for i in filter_by_case_ids(items, ["miss"])] == ["miss"]
+    assert filter_by_case_ids(items, []) == []
+
+
+def test_sample_list_filter_to_case_ids(qapp, tmp_path: Path) -> None:
+    from windows_studio.review_ui.sample_list import SampleListPanel
+
+    review_dir = tmp_path / "review"
+    review_dir.mkdir()
+    img_a = tmp_path / "a.png"
+    img_b = tmp_path / "b.png"
+    _write_png(img_a)
+    _write_png(img_b)
+    items = build_review_queue(
+        [
+            HardCase("a", img_a, label_path=None, metadata={"reason": "ok"}),
+            HardCase("b", img_b, label_path=None, metadata={"reason": "missed_detection"}),
+        ],
+        review_dir,
+    )
+    panel = SampleListPanel()
+    panel.set_items(items)
+    panel.filter_to_case_ids(["b"])
+    assert [i.case_id for i in panel.visible_items()] == ["b"]
+    assert panel.case_id_override() == ["b"]
+    panel.clear_case_id_filter()
+    assert panel.case_id_override() is None
+    assert len(panel.visible_items()) == 2
 
 
 def test_display_mode_cycle() -> None:

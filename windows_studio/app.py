@@ -22,7 +22,8 @@ WIZARD_STEPS: tuple[tuple[str, str], ...] = (
     ),
     (
         "3. 微调训练",
-        "本机 NVIDIA GPU 运行 YOLO 微调（train；#43）；dataset 负责 train/test 隔离（#42）。",
+        "本机 NVIDIA GPU 运行 YOLO 微调（train；#43/#54）；GUI 显示进度·曲线并可中断。"
+        " 评估回环见步进「评估」（eval_ui；#54），不替代 Jetson acceptance。",
     ),
     (
         "4. 导出并下发",
@@ -46,8 +47,8 @@ def format_wizard_banner() -> str:
         lines.append(f"  [{title}]")
         lines.append(f"    {detail}")
         lines.append("")
-    lines.append("子模块: ingest · review_ui · dataset · train · export_send")
-    lines.append("启动: python -m windows_studio.app --run")
+    lines.append("子模块: ingest · review_ui · dataset · train · eval_ui · export_send")
+    lines.append("启动: python -m windows_studio.app --run  |  GUI: --gui")
     return "\n".join(lines)
 
 

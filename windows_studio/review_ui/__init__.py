@@ -19,7 +19,12 @@ from windows_studio.review_ui.editor import (
     review_cases_interactive,
     save_review_manifest,
 )
-from windows_studio.review_ui.filters import FILTER_LABELS, SampleFilter, filter_review_items
+from windows_studio.review_ui.filters import (
+    FILTER_LABELS,
+    SampleFilter,
+    filter_by_case_ids,
+    filter_review_items,
+)
 from windows_studio.review_ui.labels import YoloBox, read_labels, write_labels
 
 __all__ = [
@@ -33,6 +38,7 @@ __all__ = [
     "apply_edit_command",
     "build_review_queue",
     "display_mode_caption",
+    "filter_by_case_ids",
     "filter_review_items",
     "format_item_summary",
     "is_suspect_case",

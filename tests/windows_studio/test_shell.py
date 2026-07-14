@@ -51,7 +51,12 @@ def test_step_bar_click_switches_hint(qapp: QApplication, tmp_path: Path) -> Non
     win.set_step(WizardStepId.TRAIN)
     assert win.current_step() == WizardStepId.TRAIN
     assert win.review_tools.isHidden()
-    assert "训练" in win.tool_hint.text() or "#54" in win.tool_hint.text()
+    assert not win.train_panel.isHidden()
+    assert "训练" in win.tool_hint.text() or "epoch" in win.tool_hint.text().lower()
+    win.set_step(WizardStepId.EVAL)
+    assert not win.eval_panel.isHidden()
+    assert win.train_panel.isHidden()
+    assert "召回" in win.tool_hint.text() or "acceptance" in win.tool_hint.text()
 
 
 def test_cli_info_still_works() -> None:

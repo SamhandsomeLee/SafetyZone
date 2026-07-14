@@ -1,6 +1,8 @@
-"""Left-pane sample list with filter combo (#53)."""
+"""Left-pane sample list with filter combo (#53 + #54 case-id jump)."""
 
 from __future__ import annotations
+
+from collections.abc import Sequence
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
@@ -13,7 +15,12 @@ from PySide6.QtWidgets import (
 )
 
 from windows_studio.review_ui.editor import ReviewItem
-from windows_studio.review_ui.filters import FILTER_LABELS, SampleFilter, filter_review_items
+from windows_studio.review_ui.filters import (
+    FILTER_LABELS,
+    SampleFilter,
+    filter_by_case_ids,
+    filter_review_items,
+)
 
 
 class SampleListPanel(QWidget):
@@ -40,6 +47,8 @@ class SampleListPanel(QWidget):
 
         self._all_items: list[ReviewItem] = []
         self._visible: list[ReviewItem] = []
+        # Optional override from eval miss jump (#54); None = use combo filter only.
+        self._case_id_override: list[str] | None = None
         self._show_empty_placeholder()
 
     @property
@@ -62,13 +71,34 @@ class SampleListPanel(QWidget):
         return SampleFilter.ALL
 
     def set_filter(self, mode: SampleFilter) -> None:
+        # Changing combo clears case-id override (user intentionally changed filter).
+        self._case_id_override = None
         for i in range(self._filter_combo.count()):
             raw = self._filter_combo.itemData(i)
             if raw is mode or raw == mode.value:
-                self._filter_combo.setCurrentIndex(i)
+                if self._filter_combo.currentIndex() == i:
+                    # Same index → combo signal may not fire; rebuild explicitly.
+                    self._rebuild()
+                else:
+                    self._filter_combo.setCurrentIndex(i)
                 return
         # Fallback if combo signal did not fire (same index edge cases).
         self._rebuild()
+
+    def filter_to_case_ids(self, case_ids: Sequence[str]) -> None:
+        """Eval miss→review: show only these case ids (order preserved from full list)."""
+        self._case_id_override = list(case_ids)
+        prefer = case_ids[0] if case_ids else None
+        self._rebuild(prefer_case_id=prefer)
+
+    def clear_case_id_filter(self) -> None:
+        """Drop case-id override; restore combo-based filter."""
+        self._case_id_override = None
+        self._rebuild()
+
+    def case_id_override(self) -> list[str] | None:
+        return list(self._case_id_override) if self._case_id_override is not None else None
+
     def set_items(self, items: list[ReviewItem]) -> None:
         self._all_items = list(items)
         self._rebuild()
@@ -98,6 +128,7 @@ class SampleListPanel(QWidget):
         self._rebuild(prefer_case_id=current_id)
 
     def _on_filter_changed(self, _index: int) -> None:
+        self._case_id_override = None
         self.filter_changed.emit(self.current_filter())
         self._rebuild()
 
@@ -108,8 +139,11 @@ class SampleListPanel(QWidget):
             self.selection_changed.emit(None)
 
     def _rebuild(self, *, prefer_case_id: str | None = None) -> None:
-        mode = self.current_filter()
-        self._visible = filter_review_items(self._all_items, mode)
+        if self._case_id_override is not None:
+            self._visible = filter_by_case_ids(self._all_items, self._case_id_override)
+        else:
+            mode = self.current_filter()
+            self._visible = filter_review_items(self._all_items, mode)
         self._list.blockSignals(True)
         self._list.clear()
         if not self._visible:

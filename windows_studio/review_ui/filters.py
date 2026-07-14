@@ -1,7 +1,8 @@
-"""Sample list filters for review UX (#53)."""
+"""Sample list filters for review UX (#53 + #54 case-id jump)."""
 
 from __future__ import annotations
 
+from collections.abc import Collection, Sequence
 from enum import Enum
 
 from windows_studio.review_ui.editor import ReviewItem
@@ -36,3 +37,14 @@ def filter_review_items(
     if mode is SampleFilter.SUSPECT:
         return [i for i in items if i.suspect]
     return list(items)
+
+
+def filter_by_case_ids(
+    items: Sequence[ReviewItem],
+    case_ids: Collection[str],
+) -> list[ReviewItem]:
+    """Narrow to the given case ids (order of *items* preserved). Used by eval miss→review."""
+    wanted = set(case_ids)
+    if not wanted:
+        return []
+    return [i for i in items if i.case_id in wanted]
