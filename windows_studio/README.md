@@ -14,15 +14,16 @@ Jetson 侧接收扫描见 `jetson_update/README.md` / `python -m jetson_update.r
 
 依赖可选组：`pip install -e ".[windows]"`（PySide6、ultralytics、onnxruntime-gpu 等）。
 
-## 包结构（#28 空壳）
+## 包结构
 
 ```
 windows_studio/
-├── app.py              # 单一入口（CLI / 可选 GUI）
+├── app.py              # 单一入口（CLI / GUI）
+├── shell/              # #52 三栏主壳 + 向导步进
 ├── ingest/             # #40 拉取 outbox
-├── review_ui/          # #41 复核与改框
+├── review_ui/          # #41 复核与改框（#53 GUI）
 ├── dataset/            # #42 训练/测试集隔离
-├── train/              # #43 LocalCuda 微调
+├── train/              # #43 LocalCuda 微调（#54 GUI）
 └── export_send/        # #44 导出 ONNX + 发送 inbox
 ```
 

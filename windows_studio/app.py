@@ -72,15 +72,7 @@ def run_cli_info() -> int:
 
 def run_gui(config: WizardConfig) -> int:
     try:
-        from PySide6.QtWidgets import (
-            QApplication,
-            QLabel,
-            QMainWindow,
-            QMessageBox,
-            QPushButton,
-            QVBoxLayout,
-            QWidget,
-        )
+        from PySide6.QtWidgets import QApplication
     except ImportError:
         print(
             "ERROR: PySide6 required for GUI mode. "
@@ -89,40 +81,10 @@ def run_gui(config: WizardConfig) -> int:
         )
         return 1
 
+    from windows_studio.shell import StudioMainWindow
+
     app = QApplication(sys.argv)
-    window = QMainWindow()
-    window.setWindowTitle("SafetyZone Windows Studio")
-    window.resize(720, 520)
-
-    central = QWidget()
-    layout = QVBoxLayout(central)
-    label = QLabel(format_wizard_banner().replace("\n", "<br>"))
-    label.setWordWrap(True)
-    layout.addWidget(label)
-
-    status = QLabel("点击「运行向导」开始（默认 dry-run）")
-    layout.addWidget(status)
-
-    def on_run() -> None:
-        status.setText("运行中…")
-        app.processEvents()
-        try:
-            result = run_wizard(config)
-            msg = result.message
-            if result.success:
-                QMessageBox.information(window, "向导完成", msg)
-            else:
-                QMessageBox.warning(window, "向导失败", msg)
-            status.setText(msg)
-        except Exception as exc:  # noqa: BLE001
-            QMessageBox.critical(window, "错误", str(exc))
-            status.setText(f"失败: {exc}")
-
-    btn = QPushButton("运行向导")
-    btn.clicked.connect(on_run)
-    layout.addWidget(btn)
-
-    window.setCentralWidget(central)
+    window = StudioMainWindow(config)
     window.show()
     return app.exec()
 
