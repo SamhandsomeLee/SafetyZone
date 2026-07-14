@@ -5,16 +5,18 @@
 ## 文档
 
 - [设计方案](docs/安全区入侵检测系统_设计方案.md)
-- [执行方案](docs/安全区入侵检测系统_执行方案.md)（**v1.3 Remote-Jetson**）
+- [执行方案](docs/安全区入侵检测系统_执行方案.md)
 - [验证阶段](docs/validation_phases.md)
 - [决策记录](docs/decisions.md)
+- **[windows_studio 使用说明](windows_studio/README.md)**（Win GPU 复核 / 训练 / 下发 ONNX）
+- [jetson_update 使用说明](jetson_update/README.md)（收 ONNX → 验收 → 热切换）
 
 ## 开发方式（当前）
 
 | 机器 | 用途 |
 |------|------|
-| **Win 本机** | `pytest tests/`、git、文档 |
-| **Jetson（SSH / Cursor Remote）** | export、TRT、运行 UI、Bootstrap 验证 |
+| **Win 本机** | `pytest`、git、文档；**阶段三** `windows_studio` 训练闭环 |
+| **Jetson（SSH / Cursor Remote）** | TRT、运行 UI、Bootstrap；**阶段三** `jetson_update` |
 
 Jetson 快速开始见 [validation_phases.md §1.6](docs/validation_phases.md)。
 
@@ -52,6 +54,16 @@ python tools/jetson_infer_smoke.py --engine models/stock/yolov8s.engine
 
 大文件（`*.onnx` / `*.engine` / `demo.mp4`）不进 git，统一 Win scp 同步。
 
+## 阶段三：Windows Studio（简述）
+
+完整步骤见 **[windows_studio/README.md](windows_studio/README.md)**。
+
+```powershell
+pip install -e ".[windows,dev]"
+python -m windows_studio.app --gui
+python -m windows_studio.app --run --real --outbox <outbox> --inbox <inbox>
+```
+
 ## 仓库结构
 
 ```
@@ -62,8 +74,8 @@ plc/            # S7-1200/1500 (snap7)
 record/         # 快照 + 短片段
 ui/             # Jetson 运行 UI (PySide6)
 app/            # 编排
-jetson_update/  # 模型接收与验收（阶段三）
-windows_studio/ # 调试人员 Win GPU 闭环工具（阶段三）
+windows_studio/ # 调试人员 Win GPU 闭环 — 详见 windows_studio/README.md
+jetson_update/  # 模型接收与验收 — 详见 jetson_update/README.md
 configs/
 tests/
 ```
