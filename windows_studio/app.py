@@ -18,11 +18,12 @@ WIZARD_STEPS: tuple[tuple[str, str], ...] = (
     ),
     (
         "2. 复核标注",
-        "确认 / 改框 / 删 / 补预标注（review_ui；#41）。",
+        "确认 / 拖框 / 删 / 补预标注；列表过滤与显示模式（review_ui；#41/#53）。",
     ),
     (
         "3. 微调训练",
-        "本机 NVIDIA GPU 运行 YOLO 微调（train；#43）；dataset 负责 train/test 隔离（#42）。",
+        "本机 NVIDIA GPU 运行 YOLO 微调（train；#43/#54）；GUI 显示进度·曲线并可中断。"
+        " 评估回环见步进「评估」（eval_ui；#54），不替代 Jetson acceptance。",
     ),
     (
         "4. 导出并下发",
@@ -46,8 +47,8 @@ def format_wizard_banner() -> str:
         lines.append(f"  [{title}]")
         lines.append(f"    {detail}")
         lines.append("")
-    lines.append("子模块: ingest · review_ui · dataset · train · export_send")
-    lines.append("启动: python -m windows_studio.app --run")
+    lines.append("子模块: ingest · review_ui · dataset · train · eval_ui · export_send")
+    lines.append("启动: python -m windows_studio.app --run  |  GUI: --gui")
     return "\n".join(lines)
 
 
@@ -72,15 +73,7 @@ def run_cli_info() -> int:
 
 def run_gui(config: WizardConfig) -> int:
     try:
-        from PySide6.QtWidgets import (
-            QApplication,
-            QLabel,
-            QMainWindow,
-            QMessageBox,
-            QPushButton,
-            QVBoxLayout,
-            QWidget,
-        )
+        from PySide6.QtWidgets import QApplication
     except ImportError:
         print(
             "ERROR: PySide6 required for GUI mode. "
@@ -89,40 +82,10 @@ def run_gui(config: WizardConfig) -> int:
         )
         return 1
 
+    from windows_studio.shell import StudioMainWindow
+
     app = QApplication(sys.argv)
-    window = QMainWindow()
-    window.setWindowTitle("SafetyZone Windows Studio")
-    window.resize(720, 520)
-
-    central = QWidget()
-    layout = QVBoxLayout(central)
-    label = QLabel(format_wizard_banner().replace("\n", "<br>"))
-    label.setWordWrap(True)
-    layout.addWidget(label)
-
-    status = QLabel("点击「运行向导」开始（默认 dry-run）")
-    layout.addWidget(status)
-
-    def on_run() -> None:
-        status.setText("运行中…")
-        app.processEvents()
-        try:
-            result = run_wizard(config)
-            msg = result.message
-            if result.success:
-                QMessageBox.information(window, "向导完成", msg)
-            else:
-                QMessageBox.warning(window, "向导失败", msg)
-            status.setText(msg)
-        except Exception as exc:  # noqa: BLE001
-            QMessageBox.critical(window, "错误", str(exc))
-            status.setText(f"失败: {exc}")
-
-    btn = QPushButton("运行向导")
-    btn.clicked.connect(on_run)
-    layout.addWidget(btn)
-
-    window.setCentralWidget(central)
+    window = StudioMainWindow(config)
     window.show()
     return app.exec()
 

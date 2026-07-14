@@ -14,15 +14,17 @@ Jetson 侧接收扫描见 `jetson_update/README.md` / `python -m jetson_update.r
 
 依赖可选组：`pip install -e ".[windows]"`（PySide6、ultralytics、onnxruntime-gpu 等）。
 
-## 包结构（#28 空壳）
+## 包结构
 
 ```
 windows_studio/
-├── app.py              # 单一入口（CLI / 可选 GUI）
+├── app.py              # 单一入口（CLI / GUI）
+├── shell/              # #52 三栏主壳 + 向导步进
 ├── ingest/             # #40 拉取 outbox
-├── review_ui/          # #41 复核与改框
+├── review_ui/          # #41 复核数据层 + #53 画布/过滤 GUI
 ├── dataset/            # #42 训练/测试集隔离
-├── train/              # #43 LocalCuda 微调
+├── train/              # #43 LocalCuda 微调 + #54 进度/曲线/可中断 GUI
+├── eval_ui/            # #54 召回优先评估 + 漏检跳转复核
 └── export_send/        # #44 导出 ONNX + 发送 inbox
 ```
 
@@ -57,8 +59,9 @@ python -m windows_studio.export_send.cli send --onnx export/model.onnx --inbox /
 ## 四步向导（#45 已串联）
 
 1. **拉取难 case** — `ingest`：配置 outbox 路径或 rsync，列出待复核样本。
-2. **复核标注** — `review_ui`：确认 / 改框 / 删 / 补预标注。
-3. **微调训练** — `train`：本机 GPU `yolo train`；`dataset` 负责 train/test 物理隔离。
+2. **复核标注** — `review_ui`：确认 / 拖框 / 删 / 补；列表过滤（全部/未确认/已确认/疑似漏检）；空格切换 原图/标注/标注+预测；文案强调**宁可多标、勿漏标**。
+3. **微调训练** — `train`：本机 GPU `yolo train`；GUI 显示 epoch/ETA/loss 曲线，可中断；`dataset` 负责 train/test 物理隔离。
 4. **导出并下发** — `export_send`：导出 ONNX，送入 Jetson inbox（不传 `.engine`）。
+5. **评估回环** — `eval_ui`：召回优先大字号；点漏检 → 左栏过滤并进复核；**不替代** Jetson acceptance。
 
-当前 **#40–#45** 已落地各子包与向导串联；不依赖 Jetson `ui/` / `app/`。
+当前 **#40–#45** 功能闭环 + **#52–#54** 三栏壳 / 复核画布 / 训练·评估回环已落地；不依赖 Jetson `ui/` / `app/`。CLI 复核仍可用 `python -m windows_studio.review_ui.cli`。

@@ -23,6 +23,7 @@ class ReviewItem:
     image_path: Path
     label_path: Path
     boxes: list[YoloBox] = field(default_factory=list)
+    pred_boxes: list[YoloBox] = field(default_factory=list)
     confirmed: bool = False
     suspect: bool = False
     notes: str = ""
@@ -33,6 +34,7 @@ class ReviewItem:
             "image_path": str(self.image_path),
             "label_path": str(self.label_path),
             "box_count": len(self.boxes),
+            "pred_box_count": len(self.pred_boxes),
             "confirmed": self.confirmed,
             "suspect": self.suspect,
             "notes": self.notes,
@@ -47,6 +49,29 @@ def is_suspect_case(case: HardCase) -> bool:
     if isinstance(score, (int, float)) and score < 0.5:
         return True
     return not case.has_labels
+
+
+def _load_pred_boxes(case: HardCase, review_dir: Path) -> list[YoloBox]:
+    """Optional prediction layer: ``{id}.pred.txt`` or metadata ``pred_boxes``."""
+    pred_path = review_dir / f"{case.case_id}.pred.txt"
+    if pred_path.is_file():
+        return read_labels(pred_path)
+    raw = case.metadata.get("pred_boxes")
+    if isinstance(raw, list):
+        boxes: list[YoloBox] = []
+        for row in raw:
+            if isinstance(row, (list, tuple)) and len(row) == 5:
+                boxes.append(
+                    YoloBox(
+                        class_id=int(row[0]),
+                        cx=float(row[1]),
+                        cy=float(row[2]),
+                        w=float(row[3]),
+                        h=float(row[4]),
+                    )
+                )
+        return boxes
+    return []
 
 
 def build_review_queue(cases: list[HardCase], review_dir: Path) -> list[ReviewItem]:
@@ -69,6 +94,7 @@ def build_review_queue(cases: list[HardCase], review_dir: Path) -> list[ReviewIt
                 image_path=case.image_path,
                 label_path=label_path,
                 boxes=boxes,
+                pred_boxes=_load_pred_boxes(case, review_dir),
                 suspect=is_suspect_case(case),
             )
         )
@@ -91,18 +117,47 @@ def load_review_manifest(review_dir: Path) -> list[ReviewItem]:
     items: list[ReviewItem] = []
     for row in data:
         label_path = Path(row["label_path"])
+        case_id = row["case_id"]
+        pred_path = review_dir / f"{case_id}.pred.txt"
+        pred_boxes = read_labels(pred_path) if pred_path.is_file() else []
         items.append(
             ReviewItem(
-                case_id=row["case_id"],
+                case_id=case_id,
                 image_path=Path(row["image_path"]),
                 label_path=label_path,
                 boxes=read_labels(label_path),
+                pred_boxes=pred_boxes,
                 confirmed=bool(row.get("confirmed")),
                 suspect=bool(row.get("suspect")),
                 notes=str(row.get("notes", "")),
             )
         )
     return items
+
+
+def load_workspace_review(
+    workspace: Path,
+    *,
+    review_dir: Path | None = None,
+    staging_dir: Path | None = None,
+) -> list[ReviewItem]:
+    """Load review queue from workspace review/ or ingest staging.
+
+    Prefer existing ``review_manifest.json``; otherwise build from staged
+    ingest cases. Returns empty list when neither has data.
+    """
+    review = review_dir or (workspace / "review")
+    items = load_review_manifest(review)
+    if items:
+        return items
+
+    staging = staging_dir or (workspace / "ingest")
+    from windows_studio.ingest import load_staged_cases
+
+    cases = load_staged_cases(staging)
+    if not cases:
+        return []
+    return build_review_queue(cases, review)
 
 
 def format_item_summary(index: int, total: int, item: ReviewItem) -> str:
